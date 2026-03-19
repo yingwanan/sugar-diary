@@ -2,6 +2,9 @@
 
 Sugar Diary（砂糖日记）是一款原生 Android 本地日记应用，面向希望长期保留私人写作记录、同时又需要 AI 辅助整理与分析的用户。应用支持 Markdown 与 HTML 写作、插入设备本地图片、使用 OpenAI 兼容接口做审查与润色，并基于文章与图片生成情绪分析和周期报告。
 
+- Repository: `https://github.com/yingwanan/sugar-diary`
+- Release: `https://github.com/yingwanan/sugar-diary/releases/tag/v1.0.0`
+
 ## Core Features
 
 - 本地优先：文章默认保存在设备本地，不依赖云端同步。
@@ -44,6 +47,7 @@ Sugar Diary（砂糖日记）是一款原生 Android 本地日记应用，面向
 - 英文名：`Sugar Diary`
 - 发布包类型：Android APK
 - 已支持自定义图标、发布签名与本地正式构建
+- 当前公开发行版本：`v1.0.0`
 
 ## License
 
