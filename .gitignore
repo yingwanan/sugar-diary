@@ -1,0 +1,10 @@
+.gradle/
+local.properties
+.android-sdk/
+build/
+app/build/
+keystore.properties
+signing/
+*.jks
+*.keystore
+app/src/main/res/drawable/ic_launcher_foreground.png
