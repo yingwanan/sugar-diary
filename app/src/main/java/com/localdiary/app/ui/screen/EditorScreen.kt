@@ -352,7 +352,7 @@ fun EditorScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Text("更多分析", style = MaterialTheme.typography.titleMedium)
-                            Text("日报、周报、月报与全部文章分析都在情绪中心；单篇完整记录可从独立分析页查看。")
+                            Text("周报、月报与全部文章分析都在情绪中心；单篇完整记录可从独立分析页查看。")
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 TextButton(onClick = onOpenEmotionCenter) {
                                     Text("前往情绪中心")

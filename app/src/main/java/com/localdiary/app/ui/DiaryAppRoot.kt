@@ -26,6 +26,7 @@ import com.localdiary.app.di.AppContainer
 import com.localdiary.app.ui.screen.BrowserScreen
 import com.localdiary.app.ui.screen.EmotionCenterScreen
 import com.localdiary.app.ui.screen.EmotionDetailScreen
+import com.localdiary.app.ui.screen.EmotionReportsScreen
 import com.localdiary.app.ui.screen.EditorScreen
 import com.localdiary.app.ui.screen.SettingsScreen
 import com.localdiary.app.ui.screen.TimelineScreen
@@ -33,6 +34,7 @@ import com.localdiary.app.ui.screen.ViewerScreen
 import com.localdiary.app.ui.viewmodel.BrowserViewModel
 import com.localdiary.app.ui.viewmodel.EmotionCenterViewModel
 import com.localdiary.app.ui.viewmodel.EmotionDetailViewModel
+import com.localdiary.app.ui.viewmodel.EmotionReportsViewModel
 import com.localdiary.app.ui.viewmodel.EditorViewModel
 import com.localdiary.app.ui.viewmodel.SettingsViewModel
 import com.localdiary.app.ui.viewmodel.TimelineViewModel
@@ -46,6 +48,7 @@ private const val SETTINGS_ROUTE = "settings"
 private const val EDITOR_ROUTE = "editor"
 private const val VIEWER_ROUTE = "viewer"
 private const val EMOTION_DETAIL_ROUTE = "emotion-detail"
+private const val EMOTION_REPORTS_ROUTE = "emotion-reports"
 
 @Composable
 fun DiaryAppRoot(
@@ -64,6 +67,26 @@ fun DiaryAppRoot(
         }
     }
 
+    fun navigateToTopLevel(route: String) {
+        navController.navigate(route) {
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = true
+            }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
+    fun navigateToTopLevelFromDetail(route: String) {
+        navController.navigate(route) {
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = false
+            }
+            launchSingleTop = true
+            restoreState = false
+        }
+    }
+
     Scaffold(
         bottomBar = {
             if (currentDestination?.route in topLevelRoutes) {
@@ -77,15 +100,7 @@ fun DiaryAppRoot(
                         val selected = currentDestination?.hierarchy?.any { it.route == route } == true
                         NavigationBarItem(
                             selected = selected,
-                            onClick = {
-                                navController.navigate(route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
+                            onClick = { navigateToTopLevel(route) },
                             icon = {
                                 Text(
                                     when (route) {
@@ -145,6 +160,18 @@ fun DiaryAppRoot(
                         onOpenEmotionDetail = { entryId ->
                             navController.navigate("$EMOTION_DETAIL_ROUTE/$entryId")
                         },
+                        onOpenReports = {
+                            navController.navigate(EMOTION_REPORTS_ROUTE)
+                        },
+                    )
+                }
+                composable(EMOTION_REPORTS_ROUTE) {
+                    val viewModel: EmotionReportsViewModel = viewModel(
+                        factory = EmotionReportsViewModel.factory(container.diaryRepository, container.uiMessageManager),
+                    )
+                    EmotionReportsScreen(
+                        viewModel = viewModel,
+                        onNavigateBack = { navController.popBackStack() },
                     )
                 }
                 composable("$EMOTION_DETAIL_ROUTE/{entryId}") { entryBackStack ->
@@ -177,7 +204,7 @@ fun DiaryAppRoot(
                             navController.navigate("$EDITOR_ROUTE/$targetEntryId")
                         },
                         onOpenEmotionCenter = {
-                            navController.navigate(EMOTION_ROUTE)
+                            navigateToTopLevelFromDetail(EMOTION_ROUTE)
                         },
                     )
                 }
@@ -191,7 +218,7 @@ fun DiaryAppRoot(
                         viewModel = viewModel,
                         onNavigateBack = { navController.popBackStack() },
                         onOpenEmotionCenter = {
-                            navController.navigate(EMOTION_ROUTE)
+                            navigateToTopLevelFromDetail(EMOTION_ROUTE)
                         },
                         onOpenEmotionDetail = {
                             navController.navigate("$EMOTION_DETAIL_ROUTE/$entryId")

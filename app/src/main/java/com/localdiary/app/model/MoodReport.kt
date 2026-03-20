@@ -1,14 +1,12 @@
 package com.localdiary.app.model
 
 enum class ReportPeriod {
-    DAY,
     WEEK,
     MONTH,
 }
 
 val ReportPeriod.label: String
     get() = when (this) {
-        ReportPeriod.DAY -> "日报"
         ReportPeriod.WEEK -> "周报"
         ReportPeriod.MONTH -> "月报"
     }

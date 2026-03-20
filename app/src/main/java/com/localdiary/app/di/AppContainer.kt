@@ -48,6 +48,7 @@ class AppContainer(
     init {
         appScope.launch {
             diaryRepository.seedBuiltinStyles()
+            diaryRepository.deleteLegacyDailyReports()
         }
     }
 }

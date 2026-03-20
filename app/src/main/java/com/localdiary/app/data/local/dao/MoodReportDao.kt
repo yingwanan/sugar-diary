@@ -17,4 +17,10 @@ interface MoodReportDao {
 
     @Query("SELECT * FROM mood_reports")
     suspend fun getAll(): List<MoodReportEntity>
+
+    @Query("DELETE FROM mood_reports WHERE id = :id")
+    suspend fun deleteById(id: String)
+
+    @Query("DELETE FROM mood_reports WHERE period = :period")
+    suspend fun deleteByPeriod(period: String)
 }

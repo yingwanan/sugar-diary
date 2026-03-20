@@ -27,6 +27,7 @@ data class SettingsUiState(
     val imageApiKey: String = "",
     val imageModel: String = "",
     val emotionPromptTemplate: String = AiEndpointConfig.DEFAULT_EMOTION_PROMPT_TEMPLATE,
+    val isEmotionPromptExpanded: Boolean = false,
     val storageMode: StorageMode = StorageMode.APP_PRIVATE,
     val systemFolderUri: String? = null,
     val styles: List<StylePreset> = emptyList(),
@@ -106,6 +107,10 @@ class SettingsViewModel(
 
     fun updateEmotionPromptTemplate(value: String) {
         uiState = uiState.copy(emotionPromptTemplate = value)
+    }
+
+    fun toggleEmotionPromptExpanded() {
+        uiState = uiState.copy(isEmotionPromptExpanded = !uiState.isEmotionPromptExpanded)
     }
 
     fun updateNewStyleName(value: String) {

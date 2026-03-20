@@ -13,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -165,16 +166,24 @@ fun SettingsScreen(
         SettingsSectionCard(
             title = "情绪分析提示词",
             description = "保留系统约束，同时允许你定制分析风格。",
+            onHeaderClick = viewModel::toggleEmotionPromptExpanded,
+            headerAction = {
+                TextButton(onClick = viewModel::toggleEmotionPromptExpanded) {
+                    Text(if (state.isEmotionPromptExpanded) "收起" else "展开")
+                }
+            },
         ) {
-            Text("可用变量：{{entry_text}}  {{entry_format}}  {{image_context}}")
-            OutlinedTextField(
-                value = state.emotionPromptTemplate,
-                onValueChange = viewModel::updateEmotionPromptTemplate,
-                label = { Text("情绪分析模板") },
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 8,
-            )
-            Text("模板必须保留 JSON 输出字段约束，否则无法保存。")
+            if (state.isEmotionPromptExpanded) {
+                Text("可用变量：{{entry_text}}  {{entry_format}}  {{image_context}}")
+                OutlinedTextField(
+                    value = state.emotionPromptTemplate,
+                    onValueChange = viewModel::updateEmotionPromptTemplate,
+                    label = { Text("情绪分析模板") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 8,
+                )
+                Text("模板必须保留 JSON 输出字段约束，否则无法保存。")
+            }
         }
 
         SettingsSectionCard(
@@ -262,6 +271,8 @@ fun SettingsScreen(
 private fun SettingsSectionCard(
     title: String,
     description: String,
+    onHeaderClick: (() -> Unit)? = null,
+    headerAction: @Composable (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -269,7 +280,20 @@ private fun SettingsSectionCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(title, style = MaterialTheme.typography.titleLarge)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (onHeaderClick != null) {
+                    TextButton(onClick = onHeaderClick) {
+                        Text(title, style = MaterialTheme.typography.titleLarge)
+                    }
+                } else {
+                    Text(title, style = MaterialTheme.typography.titleLarge)
+                }
+                headerAction?.invoke()
+            }
             Text(description)
             content()
         }

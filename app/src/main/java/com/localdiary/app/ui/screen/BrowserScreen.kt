@@ -1,10 +1,8 @@
 package com.localdiary.app.ui.screen
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -37,6 +35,8 @@ import androidx.compose.ui.unit.dp
 import com.localdiary.app.model.BrowserCategory
 import com.localdiary.app.model.BrowserTimeBucket
 import com.localdiary.app.model.EntryBrowserItem
+import com.localdiary.app.ui.components.OverviewHeroCard
+import com.localdiary.app.ui.components.OverviewHeroChip
 import com.localdiary.app.ui.viewmodel.BrowserViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -85,16 +85,33 @@ fun BrowserScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        BrowserHeroCard(
+        OverviewHeroCard(
             title = "文章浏览",
-            subtitle = "按标签、时间线、心情筛选，也可以直接搜索标题或日期。",
-            totalCount = state.items.size,
-            tagCount = state.availableTags.size,
-            moodCount = state.availableMoods.size,
-            isSearchExpanded = state.isSearchExpanded,
-            query = state.query,
-            onToggleSearch = viewModel::toggleSearch,
-            onQueryChange = viewModel::updateQuery,
+            subtitle = "按标签、时间线、心情筛选，或直接搜索标题和日期。",
+            actions = {
+                IconButton(onClick = viewModel::toggleSearch) {
+                    Text(if (state.isSearchExpanded) "✕" else "⌕", style = MaterialTheme.typography.titleLarge)
+                }
+            },
+            stats = {
+                OverviewHeroChip("结果 ${state.items.size}")
+                OverviewHeroChip("标签 ${state.availableTags.size}")
+                OverviewHeroChip("心情 ${state.availableMoods.size}")
+            },
+            expandedContent = if (state.isSearchExpanded) {
+                {
+                    OutlinedTextField(
+                        value = state.query,
+                        onValueChange = viewModel::updateQuery,
+                        label = { Text("搜索标题或日期") },
+                        placeholder = { Text("例如 春天 / 2026-03-21 / 2026-03") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+                }
+            } else {
+                null
+            },
         )
 
         ScrollableTabRow(selectedTabIndex = state.category.ordinal) {
@@ -108,7 +125,7 @@ fun BrowserScreen(
         }
 
         when (state.category) {
-            BrowserCategory.ALL -> BrowserHintCard("直接搜索标题和日期，或切换到下方分类。")
+            BrowserCategory.ALL -> Unit
             BrowserCategory.TAG -> FilterRow {
                 state.availableTags.forEach { tag ->
                     FilterChip(
@@ -158,71 +175,6 @@ fun BrowserScreen(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun BrowserHeroCard(
-    title: String,
-    subtitle: String,
-    totalCount: Int,
-    tagCount: Int,
-    moodCount: Int,
-    isSearchExpanded: Boolean,
-    query: String,
-    onToggleSearch: () -> Unit,
-    onQueryChange: (String) -> Unit,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        ),
-    ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(title, style = MaterialTheme.typography.headlineSmall)
-                IconButton(onClick = onToggleSearch) {
-                    Text(if (isSearchExpanded) "✕" else "⌕", style = MaterialTheme.typography.titleLarge)
-                }
-            }
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SummaryChip("结果 $totalCount")
-                SummaryChip("标签 $tagCount")
-                SummaryChip("心情 $moodCount")
-            }
-            if (isSearchExpanded) {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = onQueryChange,
-                    label = { Text("搜索标题或日期") },
-                    placeholder = { Text("例如 春天 / 2026-03-21 / 2026-03") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SummaryChip(label: String) {
-    Box(
-        modifier = Modifier
-            .background(
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.75f),
-                shape = MaterialTheme.shapes.medium,
-            )
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-    ) {
-        Text(label, style = MaterialTheme.typography.labelLarge)
     }
 }
 

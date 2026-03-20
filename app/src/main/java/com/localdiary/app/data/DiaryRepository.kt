@@ -95,7 +95,7 @@ class DiaryRepository(
     }
 
     fun observeReports(): Flow<List<MoodReport>> = moodReportDao.observeAll().map { reports ->
-        reports.map(::reportToModel)
+        reports.mapNotNull(::reportToModel)
     }
 
     fun observeEmotionCenterItems(): Flow<List<EmotionCenterItem>> = combine(
@@ -402,6 +402,14 @@ class DiaryRepository(
         return report
     }
 
+    suspend fun deleteReport(reportId: String) {
+        moodReportDao.deleteById(reportId)
+    }
+
+    suspend fun deleteLegacyDailyReports() {
+        moodReportDao.deleteByPeriod("DAY")
+    }
+
     suspend fun exportBundle(resolver: ContentResolver, uri: Uri) {
         transferManager.exportBundle(
             resolver = resolver,
@@ -459,9 +467,11 @@ class DiaryRepository(
                 ),
             )
         }
-        imported.manifest.reports.forEach { report ->
-            moodReportDao.insert(report)
-        }
+        imported.manifest.reports
+            .filterNot { it.period == "DAY" }
+            .forEach { report ->
+                moodReportDao.insert(report)
+            }
     }
 
     suspend fun exportRaw(resolver: ContentResolver, folderUri: Uri) {
@@ -517,17 +527,20 @@ class DiaryRepository(
         createdAt = entity.createdAt,
     )
 
-    private fun reportToModel(entity: MoodReportEntity): MoodReport = MoodReport(
-        id = entity.id,
-        period = ReportPeriod.valueOf(entity.period),
-        rangeStart = entity.rangeStart,
-        rangeEnd = entity.rangeEnd,
-        dominantMoods = json.decodeFromString(entity.dominantMoodsJson),
-        averageIntensity = entity.averageIntensity,
-        summary = entity.summary,
-        advice = json.decodeFromString(entity.adviceJson),
-        createdAt = entity.createdAt,
-    )
+    private fun reportToModel(entity: MoodReportEntity): MoodReport? {
+        val period = entity.period.toReportPeriodOrNull() ?: return null
+        return MoodReport(
+            id = entity.id,
+            period = period,
+            rangeStart = entity.rangeStart,
+            rangeEnd = entity.rangeEnd,
+            dominantMoods = json.decodeFromString(entity.dominantMoodsJson),
+            averageIntensity = entity.averageIntensity,
+            summary = entity.summary,
+            advice = json.decodeFromString(entity.adviceJson),
+            createdAt = entity.createdAt,
+        )
+    }
 
     private fun versionToModel(entity: VersionSnapshotEntity): VersionSnapshot = VersionSnapshot(
         versionId = entity.versionId,
@@ -565,16 +578,20 @@ class DiaryRepository(
 private fun ReportPeriod.range(now: LocalDate): Pair<Long, Long> {
     val zone = ZoneId.systemDefault()
     val startDate = when (this) {
-        ReportPeriod.DAY -> now
         ReportPeriod.WEEK -> now.with(java.time.DayOfWeek.MONDAY)
         ReportPeriod.MONTH -> now.with(TemporalAdjusters.firstDayOfMonth())
     }
     val endDate = when (this) {
-        ReportPeriod.DAY -> now.plusDays(1)
         ReportPeriod.WEEK -> startDate.plusWeeks(1)
         ReportPeriod.MONTH -> startDate.plusMonths(1)
     }
     val start = startDate.atStartOfDay(zone).toInstant().toEpochMilli()
     val end = endDate.atStartOfDay(zone).toInstant().toEpochMilli() - 1
     return start to end
+}
+
+private fun String.toReportPeriodOrNull(): ReportPeriod? = when (this) {
+    ReportPeriod.WEEK.name -> ReportPeriod.WEEK
+    ReportPeriod.MONTH.name -> ReportPeriod.MONTH
+    else -> null
 }
