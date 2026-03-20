@@ -5,6 +5,8 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +17,8 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -33,7 +37,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
@@ -42,8 +48,8 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import com.localdiary.app.model.EditorDocumentBlock
 import com.localdiary.app.model.EditorDocumentParser
+import com.localdiary.app.model.EntryFormat
 import com.localdiary.app.model.PolishCandidate
-import com.localdiary.app.model.ReportPeriod
 import com.localdiary.app.model.ReviewResult
 import com.localdiary.app.model.StylePreset
 import com.localdiary.app.ui.components.ArticlePreview
@@ -52,12 +58,15 @@ import com.localdiary.app.ui.viewmodel.EditorViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun EditorScreen(
     viewModel: EditorViewModel,
     onNavigateBack: () -> Unit,
+    onOpenEmotionCenter: () -> Unit,
+    onOpenEmotionDetail: () -> Unit,
 ) {
     val state = viewModel.uiState
     val context = LocalContext.current
@@ -194,7 +203,7 @@ fun EditorScreen(
         )
 
         ScrollableTabRow(selectedTabIndex = tabIndex) {
-            listOf("编辑", "预览", "AI", "分析").forEachIndexed { index, label ->
+            listOf("编辑", "预览", "AI", "情绪").forEachIndexed { index, label ->
                 Tab(selected = tabIndex == index, onClick = { tabIndex = index }, text = { Text(label) })
             }
         }
@@ -204,7 +213,11 @@ fun EditorScreen(
                 state = state,
                 onTitleChange = viewModel::updateTitle,
                 onTagsChange = viewModel::updateTags,
+                onExpandMeta = viewModel::expandMeta,
                 onInsertImage = { imagePickerLauncher.launch(arrayOf("image/*")) },
+                onFocusTextBlock = { blockId, selection ->
+                    viewModel.focusTextBlock(blockId, selection, collapseMeta = true)
+                },
                 onTextChange = viewModel::updateTextBlock,
                 onDeleteImage = viewModel::removeImageBlock,
             )
@@ -219,13 +232,34 @@ fun EditorScreen(
             ) {
                 EntryStatusBanner(
                     title = "AI 工具",
-                    detail = "当前输出格式 ${state.format.label}。润色和审查会严格保留目标格式。",
+                    detail = "文风润色只改表达，不改格式。格式转换只改成你指定的 Markdown 或 HTML，不改原文措辞。",
                     isError = false,
                 )
                 state.error?.let { EntryStatusBanner(title = "AI 请求失败", detail = it, isError = true) }
+                Text("格式转换", style = MaterialTheme.typography.titleMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { confirmAction = "review" }) {
-                        Text("审查并生成候选稿")
+                    EntryFormat.entries.forEach { target ->
+                        FilterChip(
+                            selected = state.reviewTargetFormat == target,
+                            onClick = { viewModel.updateReviewTarget(target) },
+                            label = { Text(target.label) },
+                        )
+                    }
+                }
+                Text(
+                    if (state.reviewTargetFormat == state.format) {
+                        "当前文章已经是 ${state.format.label}，请选择另一种目标格式。"
+                    } else {
+                        "当前将转换为 ${state.reviewTargetFormat.label}。"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { confirmAction = "review" },
+                        enabled = state.reviewTargetFormat != state.format,
+                    ) {
+                        Text("生成格式转换稿")
                     }
                 }
                 Text("文风润色", style = MaterialTheme.typography.titleMedium)
@@ -260,62 +294,71 @@ fun EditorScreen(
                 }
             }
 
-            3 -> Column(
+            3 -> LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                EntryStatusBanner(
-                    title = "心理分析与周期报告",
-                    detail = "分析结果仅用于自我记录与观察，不构成医疗建议。",
-                    isError = false,
-                )
-                state.error?.let { EntryStatusBanner(title = "分析失败", detail = it, isError = true) }
-                Button(onClick = { confirmAction = "analysis" }) {
-                    Text("分析当前文章")
+                item("emotion-banner") {
+                    EntryStatusBanner(
+                        title = "当前文章情绪",
+                        detail = "这里保留当前文章的重新分析与摘要查看；完整情绪详情已经拆分为独立页面。",
+                        isError = false,
+                    )
                 }
-                state.latestAnalysis?.let { analysis ->
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("最近一次分析", style = MaterialTheme.typography.titleMedium)
-                            Text("情绪标签: ${analysis.labels.joinToString()}")
-                            Text("强度: ${analysis.intensity}/100")
-                            Text(analysis.summary)
-                            analysis.suggestions.forEach { suggestion ->
-                                Text("• $suggestion")
-                            }
-                            if (analysis.safetyFlag) {
-                                Text("检测到高风险内容，请优先联系现实中的可信支持或专业帮助。")
-                            }
+                if (state.error != null) {
+                    item("emotion-error") {
+                        EntryStatusBanner(title = "分析失败", detail = state.error, isError = true)
+                    }
+                }
+                item("emotion-actions") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { confirmAction = "analysis" }) {
+                            Text("重新分析当前文章")
+                        }
+                        TextButton(onClick = onOpenEmotionDetail) {
+                            Text("查看完整分析")
                         }
                     }
                 }
-                Text("生成周期报告")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ReportPeriod.entries.forEach { period ->
-                        FilterChip(
-                            selected = false,
-                            onClick = { viewModel.generateReport(period) },
-                            label = { Text(period.name) },
-                        )
+                item("emotion-latest") {
+                    state.latestAnalysis?.let { analysis ->
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Text("最近一次分析", style = MaterialTheme.typography.titleMedium)
+                                Text("情绪标签: ${analysis.labels.joinToString()}")
+                                Text("强度: ${analysis.intensity}/100")
+                                Text(analysis.summary)
+                                analysis.suggestions.forEach { suggestion ->
+                                    Text("• $suggestion")
+                                }
+                                if (analysis.safetyFlag) {
+                                    Text("检测到高风险内容，请优先联系现实中的可信支持或专业帮助。")
+                                }
+                            }
+                        }
+                    } ?: Card(modifier = Modifier.fillMaxWidth()) {
+                        Text("这篇文章还没有情绪分析记录。", modifier = Modifier.padding(16.dp))
                     }
                 }
-                Box(modifier = Modifier.weight(1f)) {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        items(state.reports, key = { it.id }) { report ->
-                            Card(modifier = Modifier.fillMaxWidth()) {
-                                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text(report.period.name, style = MaterialTheme.typography.titleMedium)
-                                    Text(report.summary)
-                                    Text("主导情绪: ${report.dominantMoods.joinToString()}")
-                                    report.advice.forEach { advice ->
-                                        Text("• $advice")
-                                    }
-                                    Text(
-                                        "生成于 ${formatTimestamp(report.createdAt)}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
+                item("emotion-center-link") {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text("更多分析", style = MaterialTheme.typography.titleMedium)
+                            Text("日报、周报、月报与全部文章分析都在情绪中心；单篇完整记录可从独立分析页查看。")
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(onClick = onOpenEmotionCenter) {
+                                    Text("前往情绪中心")
+                                }
+                                TextButton(onClick = onOpenEmotionDetail) {
+                                    Text("打开分析详情")
                                 }
                             }
                         }
@@ -326,12 +369,15 @@ fun EditorScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun EditorTab(
     state: com.localdiary.app.ui.viewmodel.EditorUiState,
     onTitleChange: (String) -> Unit,
     onTagsChange: (String) -> Unit,
+    onExpandMeta: () -> Unit,
     onInsertImage: () -> Unit,
+    onFocusTextBlock: (String, TextRange?) -> Unit,
     onTextChange: (String, String, TextRange) -> Unit,
     onDeleteImage: (String) -> Unit,
 ) {
@@ -341,11 +387,13 @@ private fun EditorTab(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        EntryStatusBanner(
-            title = "当前格式 ${state.format.label}",
-            detail = state.infoMessage ?: "图片会作为卡片插入到当前光标位置，保存时仍写回原始文章格式。",
-            isError = false,
-        )
+        state.infoMessage?.let {
+            EntryStatusBanner(
+                title = "操作提示",
+                detail = it,
+                isError = false,
+            )
+        }
         state.error?.let {
             EntryStatusBanner(
                 title = "操作失败",
@@ -353,36 +401,34 @@ private fun EditorTab(
                 isError = true,
             )
         }
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+        if (state.isMetaCollapsed) {
+            MetaSummaryCard(
+                title = state.title.ifBlank { "未命名文章" },
+                tagsInput = state.tagsInput,
+                onExpand = onExpandMeta,
+            )
+        } else {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             ) {
-                OutlinedTextField(
-                    value = state.title,
-                    onValueChange = onTitleChange,
-                    label = { Text("标题") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
-                OutlinedTextField(
-                    value = state.tagsInput,
-                    onValueChange = onTagsChange,
-                    label = { Text("标签，逗号分隔") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = onInsertImage) {
-                        Text("插入本地图片")
-                    }
-                    Text(
-                        text = "支持 Markdown 和 HTML，图片以内嵌方式保存。",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(top = 12.dp),
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedTextField(
+                        value = state.title,
+                        onValueChange = onTitleChange,
+                        label = { Text("标题") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = state.tagsInput,
+                        onValueChange = onTagsChange,
+                        label = { Text("标签，逗号分隔") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
                     )
                 }
             }
@@ -397,7 +443,22 @@ private fun EditorTab(
                     .padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("正文文稿流", style = MaterialTheme.typography.titleMedium)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text("正文", style = MaterialTheme.typography.titleMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (state.isMetaCollapsed) {
+                            TextButton(onClick = onExpandMeta) {
+                                Text("标题与标签")
+                            }
+                        }
+                        Button(onClick = onInsertImage) {
+                            Text("插入图片")
+                        }
+                    }
+                }
                 HorizontalDivider()
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -411,6 +472,8 @@ private fun EditorTab(
                     }) { block ->
                         when (block) {
                             is EditorDocumentBlock.Text -> {
+                                val bringIntoViewRequester = remember { BringIntoViewRequester() }
+                                val scope = rememberCoroutineScope()
                                 val selection = if (state.activeTextBlockId == block.id) {
                                     TextRange(
                                         state.selectionStart.coerceIn(0, block.text.length),
@@ -422,9 +485,23 @@ private fun EditorTab(
                                 OutlinedTextField(
                                     value = TextFieldValue(text = block.text, selection = selection),
                                     onValueChange = { value ->
+                                        onFocusTextBlock(block.id, value.selection)
                                         onTextChange(block.id, value.text, value.selection)
+                                        scope.launch {
+                                            bringIntoViewRequester.bringIntoView()
+                                        }
                                     },
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .bringIntoViewRequester(bringIntoViewRequester)
+                                        .onFocusChanged { focusState ->
+                                            if (focusState.isFocused) {
+                                                onFocusTextBlock(block.id, selection)
+                                                scope.launch {
+                                                    bringIntoViewRequester.bringIntoView()
+                                                }
+                                            }
+                                        },
                                     textStyle = MaterialTheme.typography.bodyLarge,
                                     placeholder = {
                                         Text("在这里继续写作，或把图片插入到当前光标位置。")
@@ -448,6 +525,41 @@ private fun EditorTab(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MetaSummaryCard(
+    title: String,
+    tagsInput: String,
+    onExpand: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onExpand),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                if (tagsInput.isNotBlank()) {
+                    Text(
+                        "标签: $tagsInput",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            TextButton(onClick = onExpand) {
+                Text("展开")
             }
         }
     }
@@ -484,7 +596,8 @@ private fun ReviewResultCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("审查候选稿", style = MaterialTheme.typography.titleMedium)
+            Text("格式转换候选稿", style = MaterialTheme.typography.titleMedium)
+            Text("目标格式: ${result.format.label}")
             result.suggestedTitle?.takeIf { it.isNotBlank() }?.let {
                 Text("建议标题: $it")
             }
@@ -492,7 +605,7 @@ private fun ReviewResultCard(
                 Text("• $issue")
             }
             TextButton(onClick = onApply) {
-                Text("应用候选稿")
+                Text("应用转换稿")
             }
         }
     }

@@ -26,7 +26,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.localdiary.app.model.EntryFormat
 import com.localdiary.app.ui.viewmodel.TimelineViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -65,7 +64,7 @@ fun TimelineScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text("本地日记", style = MaterialTheme.typography.headlineMedium)
-                Text("所有文章只保存在本地设备，支持 Markdown 和 HTML 两种记录格式。")
+                Text("所有文章只保存在本地设备，正文格式可以在后续编辑里再转换。")
                 OutlinedTextField(
                     value = newTitle,
                     onValueChange = { newTitle = it },
@@ -73,23 +72,13 @@ fun TimelineScreen(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = {
-                            viewModel.createEntry(newTitle, EntryFormat.MARKDOWN, onOpenEntry)
-                            newTitle = ""
-                        },
-                    ) {
-                        Text("新建 Markdown")
-                    }
-                    Button(
-                        onClick = {
-                            viewModel.createEntry(newTitle, EntryFormat.HTML, onOpenEntry)
-                            newTitle = ""
-                        },
-                    ) {
-                        Text("新建 HTML")
-                    }
+                Button(
+                    onClick = {
+                        viewModel.createEntry(newTitle, onOpenEntry)
+                        newTitle = ""
+                    },
+                ) {
+                    Text("新建文章")
                 }
             }
         }

@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.localdiary.app.data.DiaryRepository
-import com.localdiary.app.model.EntryFormat
 import com.localdiary.app.model.EntryMeta
 import com.localdiary.app.ui.UiMessageManager
 import kotlinx.coroutines.flow.SharingStarted
@@ -21,12 +20,11 @@ class TimelineViewModel(
 
     fun createEntry(
         title: String,
-        format: EntryFormat,
         onCreated: (String) -> Unit,
     ) {
         viewModelScope.launch {
             runCatching {
-                repository.createEntry(title = title, format = format)
+                repository.createEntry(title = title, format = com.localdiary.app.model.EntryFormat.MARKDOWN)
             }.onSuccess { entryId ->
                 onCreated(entryId)
             }.onFailure { error ->

@@ -42,6 +42,7 @@ class OpenAiCompatibleLlmProvider(
     override suspend fun testConnection(config: AiEndpointConfig): String {
         val payload = completeText(
             endpoint = config.toMainEndpoint(),
+            operationLabel = "主模型连接测试",
             systemPrompt = """
                 你是连接测试助手。请仅返回 JSON:
                 {"status":"ok","message":"..."}
@@ -55,6 +56,7 @@ class OpenAiCompatibleLlmProvider(
     override suspend fun testImageConnection(config: AiEndpointConfig): String {
         val payload = completeText(
             endpoint = config.toImageEndpoint(),
+            operationLabel = "图片模型连接测试",
             systemPrompt = """
                 你是连接测试助手。请仅返回 JSON:
                 {"status":"ok","message":"..."}
@@ -68,14 +70,19 @@ class OpenAiCompatibleLlmProvider(
     override suspend fun review(
         config: AiEndpointConfig,
         content: String,
-        format: EntryFormat,
+        targetFormat: EntryFormat,
+        embeddedImagePlaceholders: List<String>,
     ): ReviewResult {
         val payload = completeText(
             endpoint = config.toMainEndpoint(),
+            operationLabel = "格式转换",
             systemPrompt = """
-                你是文章审校助手。请返回 JSON:
+                你是格式转换助手。请仅做格式转换，不改写正文措辞、语气、顺序或语义，不补写、不删减。
+                目标格式是 ${targetFormat.label}。如果为达成目标格式必须补充最小量的结构、标签、转义或换行整理，可以做，但不得改变原意。
+                ${placeholderInstruction(embeddedImagePlaceholders)}
+                请返回 JSON:
                 {"issues":["..."],"suggestedTitle":"...","candidateContent":"..."}
-                candidateContent 必须严格使用 ${format.label} 语法。
+                candidateContent 必须严格使用 ${targetFormat.label} 语法。
             """.trimIndent(),
             userPrompt = content,
         )
@@ -84,7 +91,7 @@ class OpenAiCompatibleLlmProvider(
             issues = parsed.issues,
             suggestedTitle = parsed.suggestedTitle,
             candidateContent = parsed.candidateContent,
-            format = format,
+            format = targetFormat,
         )
     }
 
@@ -93,14 +100,20 @@ class OpenAiCompatibleLlmProvider(
         content: String,
         format: EntryFormat,
         preset: StylePreset,
+        embeddedImagePlaceholders: List<String>,
     ): PolishCandidate {
         val payload = completeText(
             endpoint = config.toMainEndpoint(),
+            operationLabel = "文风润色",
             systemPrompt = """
                 你是文风润色助手。请按以下风格改写，并返回 JSON:
                 {"rationale":"...","content":"..."}
                 风格提示词: ${preset.prompt}
-                输出正文必须严格使用 ${format.label} 语法。
+                只允许调整文风，不允许做格式转换。
+                如果原文是普通段落，就继续保持普通段落，不要改成 Markdown 或 HTML。
+                如果原文已经是 ${format.label}，只在原有格式层级内润色，不要新增无关的标题、列表或标签。
+                ${placeholderInstruction(embeddedImagePlaceholders)}
+                输出正文必须保持原有格式形态。
             """.trimIndent(),
             userPrompt = content,
         )
@@ -118,52 +131,91 @@ class OpenAiCompatibleLlmProvider(
         content: String,
         format: EntryFormat,
         imageDataUrls: List<String>,
+        embeddedImagePlaceholders: List<String>,
     ): PsychologyAnalysisResult {
         EmotionPromptTemplate.validate(config.emotionPromptTemplate)?.let { error(it) }
 
+        val limitedImages = imageDataUrls.take(MAX_ANALYSIS_IMAGES)
+        val imagePlaceholderHint = if (embeddedImagePlaceholders.isEmpty()) {
+            ""
+        } else {
+            "正文中的 ${embeddedImagePlaceholders.joinToString()} 只是内嵌图片位置标记，不属于正文语义；图片内容以图片线索字段为准。"
+        }
         val payload = when {
             imageDataUrls.isEmpty() -> {
                 completeText(
                     endpoint = config.toMainEndpoint(),
+                    operationLabel = "主模型情绪分析",
                     systemPrompt = EmotionPromptTemplate.render(
                         template = config.emotionPromptTemplate,
                         entryText = content,
                         format = format,
-                        imageContext = "",
+                        imageContext = imagePlaceholderHint,
                     ),
                     userPrompt = "请完成当前文章的情绪分析。",
                 )
             }
 
-            config.supportsVision -> {
-                completeVision(
-                    endpoint = config.toMainEndpoint(),
-                    systemPrompt = EmotionPromptTemplate.render(
-                        template = config.emotionPromptTemplate,
-                        entryText = content,
-                        format = format,
-                        imageContext = "图片将与正文一起直接发送给模型，请结合图片内容分析。",
-                    ),
-                    userPrompt = "请结合正文与这些图片完成情绪分析。",
-                    imageDataUrls = imageDataUrls,
-                )
-            }
-
             config.isImageUnderstandingConfigured -> {
-                val imageContext = summarizeImages(config, imageDataUrls)
+                val imageContext = summarizeImages(
+                    config = config,
+                    imageDataUrls = limitedImages,
+                    endpoint = config.toImageEndpoint(),
+                    operationLabel = "图片模型图片理解",
+                )
                 completeText(
                     endpoint = config.toMainEndpoint(),
+                    operationLabel = "主模型情绪分析",
                     systemPrompt = EmotionPromptTemplate.render(
                         template = config.emotionPromptTemplate,
                         entryText = content,
                         format = format,
-                        imageContext = imageContext,
+                        imageContext = listOf(imagePlaceholderHint, imageContext)
+                            .filter { it.isNotBlank() }
+                            .joinToString(separator = "\n"),
                     ),
                     userPrompt = "请基于正文与图片上下文完成情绪分析。",
                 )
             }
 
-            else -> error("当前文章包含图片，但主模型未开启视觉能力，且未配置图片理解模型。")
+            config.supportsVision -> {
+                val imageContext = summarizeImages(
+                    config = config,
+                    imageDataUrls = limitedImages,
+                    endpoint = config.toMainEndpoint(),
+                    operationLabel = "主模型图片理解",
+                )
+                completeText(
+                    endpoint = config.toMainEndpoint(),
+                    operationLabel = "主模型情绪分析",
+                    systemPrompt = EmotionPromptTemplate.render(
+                        template = config.emotionPromptTemplate,
+                        entryText = content,
+                        format = format,
+                        imageContext = listOf(imagePlaceholderHint, imageContext)
+                            .filter { it.isNotBlank() }
+                            .joinToString(separator = "\n"),
+                    ),
+                    userPrompt = "请基于正文与图片上下文完成情绪分析。",
+                )
+            }
+
+            else -> {
+                completeText(
+                    endpoint = config.toMainEndpoint(),
+                    operationLabel = "主模型情绪分析",
+                    systemPrompt = EmotionPromptTemplate.render(
+                        template = config.emotionPromptTemplate,
+                        entryText = content,
+                        format = format,
+                        imageContext = listOf(
+                            imagePlaceholderHint,
+                            "当前文章包含图片，但本次未启用图片理解，仅基于正文分析。",
+                        ).filter { it.isNotBlank() }.joinToString(separator = "\n"),
+                    ),
+                    userPrompt = "请先基于正文完成情绪分析，并在总结里避免编造未分析到的图片细节。",
+                )
+            }
         }
         return json.decodeFromString(payload)
     }
@@ -175,6 +227,7 @@ class OpenAiCompatibleLlmProvider(
     ): PeriodicReportResult {
         val payload = completeText(
             endpoint = config.toMainEndpoint(),
+            operationLabel = "主模型周期报告",
             systemPrompt = """
                 你是周期情绪报告助手。请基于已有分析摘要生成非医疗建议，返回 JSON:
                 {"dominantMoods":["..."],"summary":"...","advice":["..."]}
@@ -188,9 +241,12 @@ class OpenAiCompatibleLlmProvider(
     private suspend fun summarizeImages(
         config: AiEndpointConfig,
         imageDataUrls: List<String>,
+        endpoint: ResolvedEndpoint,
+        operationLabel: String,
     ): String {
         val payload = completeVision(
-            endpoint = config.toImageEndpoint(),
+            endpoint = endpoint,
+            operationLabel = operationLabel,
             systemPrompt = """
                 你是图片理解助手。请仅返回 JSON:
                 {"summary":"..."}
@@ -204,10 +260,12 @@ class OpenAiCompatibleLlmProvider(
 
     private suspend fun completeText(
         endpoint: ResolvedEndpoint,
+        operationLabel: String,
         systemPrompt: String,
         userPrompt: String,
     ): String = executeChatCompletion(
         endpoint = endpoint,
+        operationLabel = operationLabel,
         messages = listOf(
             buildTextMessage("system", systemPrompt),
             buildTextMessage("user", userPrompt),
@@ -216,11 +274,13 @@ class OpenAiCompatibleLlmProvider(
 
     private suspend fun completeVision(
         endpoint: ResolvedEndpoint,
+        operationLabel: String,
         systemPrompt: String,
         userPrompt: String,
         imageDataUrls: List<String>,
     ): String = executeChatCompletion(
         endpoint = endpoint,
+        operationLabel = operationLabel,
         messages = listOf(
             buildTextMessage("system", systemPrompt),
             buildVisionMessage("user", userPrompt, imageDataUrls),
@@ -229,9 +289,13 @@ class OpenAiCompatibleLlmProvider(
 
     private suspend fun executeChatCompletion(
         endpoint: ResolvedEndpoint,
+        operationLabel: String,
         messages: List<JsonObject>,
     ): String = withContext(Dispatchers.IO) {
         val client = OkHttpClient.Builder()
+            .connectTimeout(endpoint.requestTimeoutSeconds.toLong(), TimeUnit.SECONDS)
+            .readTimeout(endpoint.requestTimeoutSeconds.toLong(), TimeUnit.SECONDS)
+            .writeTimeout(endpoint.requestTimeoutSeconds.toLong(), TimeUnit.SECONDS)
             .callTimeout(endpoint.requestTimeoutSeconds.toLong(), TimeUnit.SECONDS)
             .build()
 
@@ -244,12 +308,6 @@ class OpenAiCompatibleLlmProvider(
                     JsonArray(messages),
                 )
                 put("temperature", JsonPrimitive(0.3))
-                put(
-                    "response_format",
-                    buildJsonObject {
-                        put("type", JsonPrimitive("json_object"))
-                    },
-                )
             },
         )
 
@@ -266,34 +324,52 @@ class OpenAiCompatibleLlmProvider(
                 val responseBody = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     val errorDetail = responseBody.take(200).ifBlank { "No response body" }
-                    error("LLM request failed (${response.code}): $errorDetail")
+                    error("${operationLabel}失败 (${response.code}): $errorDetail")
                 }
                 extractResponseContent(responseBody)
             }
         } catch (error: UnknownHostException) {
-            error("Unable to resolve the API host. Check the interface address.")
+            error("${operationLabel}失败：无法解析 API 域名，请检查接口地址。")
         } catch (error: SocketTimeoutException) {
-            error("The API request timed out. Check the network or increase the timeout.")
+            error("${operationLabel}超时。请检查网络，减少图片数量，或提高超时秒数。")
         } catch (error: SerializationException) {
-            error("The API returned data in an unsupported format.")
+            error("${operationLabel}失败：API 返回了不受支持的数据格式。")
         } catch (error: IOException) {
-            error("The API request could not be completed: ${error.message ?: "network error"}")
+            error("${operationLabel}失败：${error.message ?: "network error"}")
         }
     }
 
     private fun extractResponseContent(responseBody: String): String {
-        val root = json.parseToJsonElement(responseBody).jsonObject
-        val choice = root["choices"]?.jsonArray?.firstOrNull()?.jsonObject
-            ?: error("Empty LLM response")
+        val normalizedBody = responseBody
+            .trim()
+            .removePrefix("```json")
+            .removePrefix("```")
+            .removeSuffix("```")
+            .trim()
+        val root = runCatching { json.parseToJsonElement(normalizedBody) }
+            .getOrElse { return normalizedBody }
+        val rootObject = root as? JsonObject ?: return normalizedBody
+        val choice = rootObject["choices"]?.jsonArray?.firstOrNull()?.jsonObject
+            ?: return normalizedBody
         val message = choice["message"]?.jsonObject ?: error("Empty LLM response")
         val content = message["content"] ?: error("Empty LLM response")
-        return when (content) {
+        val extracted = when (content) {
             is JsonPrimitive -> content.content
             is JsonArray -> content.joinToString(separator = "\n") { item ->
-                item.jsonObject["text"]?.jsonPrimitive?.content.orEmpty()
+                val itemObject = item as? JsonObject ?: return@joinToString ""
+                itemObject["text"]?.jsonPrimitive?.content
+                    ?: itemObject["output_text"]?.jsonPrimitive?.content
+                    ?: ""
             }.trim()
             else -> error("Unsupported LLM response content.")
-        }.ifBlank { error("Empty LLM response") }
+        }
+        return extracted
+            .trim()
+            .removePrefix("```json")
+            .removePrefix("```")
+            .removeSuffix("```")
+            .trim()
+            .ifBlank { error("Empty LLM response") }
     }
 
     private fun buildTextMessage(role: String, text: String): JsonObject = buildJsonObject {
@@ -359,6 +435,15 @@ class OpenAiCompatibleLlmProvider(
         val model: String,
         val requestTimeoutSeconds: Int,
     )
+
+    private companion object {
+        const val MAX_ANALYSIS_IMAGES = 2
+    }
+
+    private fun placeholderInstruction(placeholders: List<String>): String {
+        if (placeholders.isEmpty()) return ""
+        return "原文中的 ${placeholders.joinToString()} 是内嵌图片占位符，必须逐字原样保留，并在输出中继续作为图片位置使用，不得改名、翻译、删除或展开成普通文本。"
+    }
 }
 
 @Serializable

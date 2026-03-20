@@ -2,25 +2,23 @@ package com.localdiary.app.domain.browser
 
 import com.localdiary.app.model.BrowserTimeBucket
 import com.localdiary.app.model.EntryBrowserItem
+import com.localdiary.app.domain.search.EntrySearchMatcher
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.TemporalAdjusters
-import java.util.Locale
 
 object EntryBrowserFilter {
     fun filter(
         items: List<EntryBrowserItem>,
-        titleQuery: String,
-        dateQuery: String,
+        query: String,
         selectedTag: String?,
         selectedMood: String?,
         selectedTimeBucket: BrowserTimeBucket?,
         now: LocalDate = LocalDate.now(),
     ): List<EntryBrowserItem> {
         return items.filter { item ->
-            matchesTitle(item, titleQuery) &&
-                matchesDate(item, dateQuery) &&
+            matchesSearch(item, query) &&
                 matchesTag(item, selectedTag) &&
                 matchesMood(item, selectedMood) &&
                 matchesTimeBucket(item, selectedTimeBucket, now)
@@ -40,18 +38,12 @@ object EntryBrowserFilter {
         }
     }
 
-    private fun matchesTitle(item: EntryBrowserItem, titleQuery: String): Boolean {
-        if (titleQuery.isBlank()) return true
-        return item.meta.title.lowercase(Locale.getDefault())
-            .contains(titleQuery.trim().lowercase(Locale.getDefault()))
-    }
-
-    private fun matchesDate(item: EntryBrowserItem, dateQuery: String): Boolean {
-        if (dateQuery.isBlank()) return true
-        val query = dateQuery.trim()
-        val created = searchableDates(item.meta.createdAt)
-        val updated = searchableDates(item.meta.updatedAt)
-        return (created + updated).any { it.contains(query) }
+    private fun matchesSearch(item: EntryBrowserItem, query: String): Boolean {
+        return EntrySearchMatcher.matches(
+            title = item.meta.title,
+            query = query,
+            timestamps = listOf(item.meta.createdAt, item.meta.updatedAt),
+        )
     }
 
     private fun matchesTag(item: EntryBrowserItem, selectedTag: String?): Boolean {
@@ -71,13 +63,5 @@ object EntryBrowserFilter {
     ): Boolean {
         if (selectedTimeBucket == null) return true
         return groupTimeBucket(item.meta.updatedAt, now) == selectedTimeBucket
-    }
-
-    private fun searchableDates(timestamp: Long): List<String> {
-        val date = Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
-        return listOf(
-            date.toString(),
-            date.withDayOfMonth(1).toString().substring(0, 7),
-        )
     }
 }

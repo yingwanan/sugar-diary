@@ -1,45 +1,36 @@
 package com.localdiary.app.model
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EmbeddedImageParserTest {
     @Test
-    fun `extractDataUrls finds markdown and html inline images`() {
+    fun `sanitize replaces embedded images with stable placeholders`() {
         val content = """
-            ![a](data:image/png;base64,AAAA)
-            <img src="data:image/jpeg;base64,BBBB" alt="pic" />
+            文字前缀
+            ![封面](data:image/png;base64,AAAA)
+            <img src="data:image/jpeg;base64,BBBB" alt="photo" />
         """.trimIndent()
 
-        val urls = EmbeddedImageParser.extractDataUrls(content)
+        val sanitized = EmbeddedImageParser.sanitizeForLlm(content)
 
-        assertEquals(
-            listOf(
-                "data:image/png;base64,AAAA",
-                "data:image/jpeg;base64,BBBB",
-            ),
-            urls,
-        )
+        assertEquals(listOf("[[EMBEDDED_IMAGE_1]]", "[[EMBEDDED_IMAGE_2]]"), sanitized.placeholders)
+        assertEquals(2, sanitized.imageDataUrls.size)
+        assertTrue(sanitized.content.contains("[[EMBEDDED_IMAGE_1]]"))
+        assertTrue(sanitized.content.contains("[[EMBEDDED_IMAGE_2]]"))
     }
 
     @Test
-    fun `extractDataUrls deduplicates and respects limit`() {
-        val content = buildString {
-            repeat(5) { index ->
-                append("![img$index](data:image/png;base64,AAAA$index)\n")
-            }
-            append("![dup](data:image/png;base64,AAAA1)")
-        }
+    fun `restore puts data urls back into content`() {
+        val original = """![封面](data:image/png;base64,AAAA)"""
+        val sanitized = EmbeddedImageParser.sanitizeForLlm(original)
 
-        val urls = EmbeddedImageParser.extractDataUrls(content, limit = 3)
-
-        assertEquals(
-            listOf(
-                "data:image/png;base64,AAAA0",
-                "data:image/png;base64,AAAA1",
-                "data:image/png;base64,AAAA2",
-            ),
-            urls,
+        val restored = EmbeddedImageParser.restorePlaceholders(
+            content = "<img src=\"[[EMBEDDED_IMAGE_1]]\" alt=\"封面\" />",
+            sanitizedEmbeddedContent = sanitized,
         )
+
+        assertEquals("<img src=\"data:image/png;base64,AAAA\" alt=\"封面\" />", restored)
     }
 }

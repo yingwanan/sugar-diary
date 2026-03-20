@@ -2,6 +2,7 @@ package com.localdiary.app.model
 
 data class EntryBrowserItem(
     val meta: EntryMeta,
+    val previewText: String = "",
     val latestEmotion: EntryEmotionSummary? = null,
 )
 

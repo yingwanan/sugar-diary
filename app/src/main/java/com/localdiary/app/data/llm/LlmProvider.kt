@@ -17,7 +17,8 @@ interface LlmProvider {
     suspend fun review(
         config: AiEndpointConfig,
         content: String,
-        format: EntryFormat,
+        targetFormat: EntryFormat,
+        embeddedImagePlaceholders: List<String>,
     ): ReviewResult
 
     suspend fun polish(
@@ -25,6 +26,7 @@ interface LlmProvider {
         content: String,
         format: EntryFormat,
         preset: StylePreset,
+        embeddedImagePlaceholders: List<String>,
     ): PolishCandidate
 
     suspend fun analyzePsychology(
@@ -32,6 +34,7 @@ interface LlmProvider {
         content: String,
         format: EntryFormat,
         imageDataUrls: List<String>,
+        embeddedImagePlaceholders: List<String>,
     ): PsychologyAnalysisResult
 
     suspend fun summarizePeriod(

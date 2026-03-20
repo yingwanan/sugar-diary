@@ -65,6 +65,45 @@ class LocalEntryFileStore(
         writeBytes(path, content.encodeToByteArray())
     }
 
+    suspend fun overwriteEntry(
+        entryId: String,
+        currentPath: String,
+        currentFormat: EntryFormat,
+        targetFormat: EntryFormat,
+        content: String,
+        storageSettings: AppStorageSettings,
+    ): String = withContext(Dispatchers.IO) {
+        if (currentFormat == targetFormat) {
+            writeBytes(currentPath, content.encodeToByteArray())
+            return@withContext currentPath
+        }
+
+        when (storageSettings.mode) {
+            com.localdiary.app.model.StorageMode.APP_PRIVATE -> {
+                val entryDir = File(entriesRoot, entryId).apply { mkdirs() }
+                val targetFile = File(entryDir, targetFormat.fileName)
+                targetFile.writeText(content)
+                deletePathIfNeeded(currentPath, keepPath = targetFile.absolutePath)
+                targetFile.absolutePath
+            }
+
+            com.localdiary.app.model.StorageMode.SYSTEM_FOLDER -> {
+                val root = resolveTreeRoot(storageSettings)
+                val entriesDir = ensureDirectory(root, "entries")
+                val entryDir = ensureDirectory(entriesDir, entryId)
+                val currentName = currentFormat.fileName
+                val targetFile = entryDir.findFile(targetFormat.fileName)
+                    ?: entryDir.createFile(targetFormat.mimeType, targetFormat.fileName)
+                    ?: error("Unable to create converted article file.")
+                writeBytes(targetFile.uri.toString(), content.encodeToByteArray())
+                if (currentName != targetFormat.fileName) {
+                    entryDir.findFile(currentName)?.delete()
+                }
+                targetFile.uri.toString()
+            }
+        }
+    }
+
     suspend fun saveVersion(
         entryId: String,
         format: EntryFormat,
@@ -144,6 +183,11 @@ class LocalEntryFileStore(
                 }
             }
         }
+    }
+
+    private fun deletePathIfNeeded(path: String, keepPath: String) {
+        if (path.isBlank() || path == keepPath || path.startsWith("content://")) return
+        File(path).takeIf { it.exists() }?.delete()
     }
 
     private fun resolveTreeRoot(storageSettings: AppStorageSettings): DocumentFile {

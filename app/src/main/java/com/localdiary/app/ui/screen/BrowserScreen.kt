@@ -18,6 +18,7 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ScrollableTabRow
@@ -86,37 +87,15 @@ fun BrowserScreen(
     ) {
         BrowserHeroCard(
             title = "文章浏览",
-            subtitle = "按标签、时间线、心情筛选，也可以直接搜索标题和日期。",
+            subtitle = "按标签、时间线、心情筛选，也可以直接搜索标题或日期。",
             totalCount = state.items.size,
             tagCount = state.availableTags.size,
             moodCount = state.availableMoods.size,
+            isSearchExpanded = state.isSearchExpanded,
+            query = state.query,
+            onToggleSearch = viewModel::toggleSearch,
+            onQueryChange = viewModel::updateQuery,
         )
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface,
-            ),
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                OutlinedTextField(
-                    value = state.titleQuery,
-                    onValueChange = viewModel::updateTitleQuery,
-                    label = { Text("搜索标题") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
-                OutlinedTextField(
-                    value = state.dateQuery,
-                    onValueChange = viewModel::updateDateQuery,
-                    label = { Text("搜索日期，如 2026-03-20 或 2026-03") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
-            }
-        }
 
         ScrollableTabRow(selectedTabIndex = state.category.ordinal) {
             BrowserCategory.entries.forEach { category ->
@@ -189,6 +168,10 @@ private fun BrowserHeroCard(
     totalCount: Int,
     tagCount: Int,
     moodCount: Int,
+    isSearchExpanded: Boolean,
+    query: String,
+    onToggleSearch: () -> Unit,
+    onQueryChange: (String) -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -200,12 +183,30 @@ private fun BrowserHeroCard(
             modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(title, style = MaterialTheme.typography.headlineSmall)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(title, style = MaterialTheme.typography.headlineSmall)
+                IconButton(onClick = onToggleSearch) {
+                    Text(if (isSearchExpanded) "✕" else "⌕", style = MaterialTheme.typography.titleLarge)
+                }
+            }
             Text(subtitle, style = MaterialTheme.typography.bodyMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SummaryChip("结果 $totalCount")
                 SummaryChip("标签 $tagCount")
                 SummaryChip("心情 $moodCount")
+            }
+            if (isSearchExpanded) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    label = { Text("搜索标题或日期") },
+                    placeholder = { Text("例如 春天 / 2026-03-21 / 2026-03") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
             }
         }
     }
@@ -276,18 +277,12 @@ private fun BrowserEntryCard(
                     AssistChip(onClick = {}, label = { Text(tag) })
                 }
             }
-            item.latestEmotion?.let { emotion ->
-                Text(
-                    text = "最近心情: ${emotion.labels.joinToString()}",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Text(
-                    text = emotion.summary,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+            Text(
+                text = item.previewText,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = { onOpenEntry(item.meta.id) }) {
                     Text("查看")

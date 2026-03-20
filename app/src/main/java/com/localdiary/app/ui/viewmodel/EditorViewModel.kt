@@ -13,14 +13,11 @@ import com.localdiary.app.model.EditorDocumentBlock
 import com.localdiary.app.model.EditorDocumentParser
 import com.localdiary.app.model.EmotionAnalysis
 import com.localdiary.app.model.EntryFormat
-import com.localdiary.app.model.MoodReport
 import com.localdiary.app.model.PolishCandidate
-import com.localdiary.app.model.ReportPeriod
 import com.localdiary.app.model.ReviewResult
 import com.localdiary.app.model.StylePreset
 import com.localdiary.app.model.VersionSnapshot
 import com.localdiary.app.ui.UiMessageManager
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 data class EditorUiState(
@@ -32,10 +29,11 @@ data class EditorUiState(
     val selectionStart: Int = 0,
     val selectionEnd: Int = 0,
     val format: EntryFormat = EntryFormat.MARKDOWN,
+    val reviewTargetFormat: EntryFormat = EntryFormat.HTML,
+    val isMetaCollapsed: Boolean = false,
     val loading: Boolean = true,
     val working: Boolean = false,
     val latestAnalysis: EmotionAnalysis? = null,
-    val reports: List<MoodReport> = emptyList(),
     val styles: List<StylePreset> = emptyList(),
     val versions: List<VersionSnapshot> = emptyList(),
     val reviewResult: ReviewResult? = null,
@@ -54,11 +52,6 @@ class EditorViewModel(
         private set
 
     init {
-        viewModelScope.launch {
-            repository.observeReports().collectLatest { reports ->
-                uiState = uiState.copy(reports = reports.take(5))
-            }
-        }
         refresh()
     }
 
@@ -77,6 +70,7 @@ class EditorViewModel(
                     selectionStart = activeTextBlock?.text?.length ?: 0,
                     selectionEnd = activeTextBlock?.text?.length ?: 0,
                     format = document.meta.format,
+                    reviewTargetFormat = alternateFormat(document.meta.format),
                     styles = repository.listStyles(),
                     versions = repository.listVersions(entryId),
                     latestAnalysis = repository.latestAnalysis(entryId),
@@ -99,6 +93,14 @@ class EditorViewModel(
         uiState = uiState.copy(tagsInput = value, dirty = true, infoMessage = null)
     }
 
+    fun updateReviewTarget(format: EntryFormat) {
+        uiState = uiState.copy(reviewTargetFormat = format, error = null, infoMessage = null)
+    }
+
+    fun expandMeta() {
+        uiState = uiState.copy(isMetaCollapsed = false)
+    }
+
     fun updateTextBlock(
         blockId: String,
         value: String,
@@ -116,18 +118,24 @@ class EditorViewModel(
             activeTextBlockId = blockId,
             selectionStart = selection.start.coerceIn(0, value.length),
             selectionEnd = selection.end.coerceIn(0, value.length),
+            isMetaCollapsed = true,
             dirty = true,
             infoMessage = null,
         )
     }
 
-    fun focusTextBlock(blockId: String, selection: TextRange? = null) {
+    fun focusTextBlock(
+        blockId: String,
+        selection: TextRange? = null,
+        collapseMeta: Boolean = false,
+    ) {
         val block = uiState.editorBlocks.firstOrNull { it is EditorDocumentBlock.Text && it.id == blockId } as? EditorDocumentBlock.Text
             ?: return
         uiState = uiState.copy(
             activeTextBlockId = blockId,
             selectionStart = selection?.start?.coerceIn(0, block.text.length) ?: block.text.length,
             selectionEnd = selection?.end?.coerceIn(0, block.text.length) ?: block.text.length,
+            isMetaCollapsed = uiState.isMetaCollapsed || collapseMeta,
         )
     }
 
@@ -177,6 +185,7 @@ class EditorViewModel(
                     activeTextBlockId = nextTextBlock?.id,
                     selectionStart = 0,
                     selectionEnd = 0,
+                    isMetaCollapsed = true,
                     dirty = true,
                     infoMessage = "图片已插入当前光标位置。",
                 )
@@ -231,7 +240,7 @@ class EditorViewModel(
             runCatching {
                 repository.reviewContent(
                     content = buildEditorContent(),
-                    format = uiState.format,
+                    targetFormat = uiState.reviewTargetFormat,
                 )
             }
                 .onSuccess { result ->
@@ -266,19 +275,23 @@ class EditorViewModel(
 
     fun applyReviewCandidate() {
         val candidate = uiState.reviewResult ?: return
-        applyCandidate(candidate.candidateContent, "ai_review")
+        applyCandidate(candidate.candidateContent, "format_conversion", candidate.format)
     }
 
     fun applyPolishCandidate() {
         val candidate = uiState.polishCandidate ?: return
-        applyCandidate(candidate.content, "ai_polish")
+        applyCandidate(candidate.content, "ai_polish", uiState.format)
     }
 
-    private fun applyCandidate(content: String, source: String) {
+    private fun applyCandidate(
+        content: String,
+        source: String,
+        targetFormat: EntryFormat,
+    ) {
         viewModelScope.launch {
             uiState = uiState.copy(working = true, error = null)
             runCatching {
-                repository.applyCandidate(entryId, content, source)
+                repository.applyCandidate(entryId, content, source, targetFormat)
                 val document = repository.loadDocument(entryId)
                 val blocks = EditorDocumentParser.parse(document.content)
                 val focusText = blocks.filterIsInstance<EditorDocumentBlock.Text>().lastOrNull()
@@ -288,6 +301,9 @@ class EditorViewModel(
                     activeTextBlockId = focusText?.id,
                     selectionStart = focusText?.text?.length ?: 0,
                     selectionEnd = focusText?.text?.length ?: 0,
+                    format = document.meta.format,
+                    reviewTargetFormat = alternateFormat(document.meta.format),
+                    isMetaCollapsed = true,
                     versions = repository.listVersions(entryId),
                     reviewResult = null,
                     polishCandidate = null,
@@ -321,17 +337,6 @@ class EditorViewModel(
                         infoMessage = "情绪分析已更新。",
                     )
                 }
-                .onFailure { error ->
-                    uiState = uiState.copy(error = error.message)
-                }
-            uiState = uiState.copy(working = false)
-        }
-    }
-
-    fun generateReport(period: ReportPeriod) {
-        viewModelScope.launch {
-            uiState = uiState.copy(working = true, error = null)
-            runCatching { repository.generateReport(period) }
                 .onFailure { error ->
                     uiState = uiState.copy(error = error.message)
                 }
@@ -395,6 +400,11 @@ class EditorViewModel(
         val blocks: List<EditorDocumentBlock>,
         val nextTextIndex: Int,
     )
+}
+
+private fun alternateFormat(format: EntryFormat): EntryFormat = when (format) {
+    EntryFormat.MARKDOWN -> EntryFormat.HTML
+    EntryFormat.HTML -> EntryFormat.MARKDOWN
 }
 
 private fun MutableList<EditorDocumentBlock>.mergeAdjacentTextBlocks(): MutableList<EditorDocumentBlock> {

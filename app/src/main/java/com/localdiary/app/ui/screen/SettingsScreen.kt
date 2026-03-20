@@ -98,6 +98,14 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
+                value = state.requestTimeoutSeconds,
+                onValueChange = viewModel::updateRequestTimeoutSeconds,
+                label = { Text("请求超时秒数") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            Text("建议范围 15 到 300 秒。正文里有图片时，超时应适当放宽。")
+            OutlinedTextField(
                 value = state.apiKey,
                 onValueChange = viewModel::updateApiKey,
                 label = { Text("主模型 API Key") },
@@ -105,7 +113,7 @@ fun SettingsScreen(
             )
             ToggleRow(
                 title = "主模型支持图片理解",
-                subtitle = "启用后，情绪分析会直接把内嵌图片发给主模型。",
+                subtitle = "仅作为高级路径使用。正文含图片时，优先先生成图片摘要，再交给主模型分析，可显著降低超时风险。",
                 checked = state.supportsVision,
                 onCheckedChange = viewModel::updateSupportsVision,
             )

@@ -20,6 +20,7 @@ data class SettingsUiState(
     val baseUrl: String = "",
     val apiKey: String = "",
     val model: String = "",
+    val requestTimeoutSeconds: String = "90",
     val supportsVision: Boolean = false,
     val imageModelEnabled: Boolean = false,
     val imageBaseUrl: String = "",
@@ -53,6 +54,7 @@ class SettingsViewModel(
                 baseUrl = config.baseUrl,
                 apiKey = config.apiKey,
                 model = config.model,
+                requestTimeoutSeconds = config.requestTimeoutSeconds.toString(),
                 supportsVision = config.supportsVision,
                 imageModelEnabled = config.imageModelEnabled,
                 imageBaseUrl = config.imageBaseUrl,
@@ -76,6 +78,10 @@ class SettingsViewModel(
 
     fun updateModel(value: String) {
         uiState = uiState.copy(model = value)
+    }
+
+    fun updateRequestTimeoutSeconds(value: String) {
+        uiState = uiState.copy(requestTimeoutSeconds = value.filter { it.isDigit() }.take(3))
     }
 
     fun updateSupportsVision(value: Boolean) {
@@ -266,6 +272,9 @@ class SettingsViewModel(
             baseUrl = uiState.baseUrl.trim(),
             apiKey = uiState.apiKey.trim(),
             model = uiState.model.trim(),
+            requestTimeoutSeconds = uiState.requestTimeoutSeconds.toIntOrNull()
+                ?.takeIf { it in 15..300 }
+                ?: error("请求超时时间必须是 15 到 300 之间的整数秒。"),
             supportsVision = uiState.supportsVision,
             imageModelEnabled = uiState.imageModelEnabled,
             imageBaseUrl = uiState.imageBaseUrl.trim(),

@@ -6,6 +6,13 @@ enum class ReportPeriod {
     MONTH,
 }
 
+val ReportPeriod.label: String
+    get() = when (this) {
+        ReportPeriod.DAY -> "日报"
+        ReportPeriod.WEEK -> "周报"
+        ReportPeriod.MONTH -> "月报"
+    }
+
 data class MoodReport(
     val id: String,
     val period: ReportPeriod,

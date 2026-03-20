@@ -1,15 +1,20 @@
 package com.localdiary.app.ui.components
 
-import android.graphics.Color
-import android.webkit.WebView
+import android.widget.TextView
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.text.HtmlCompat
+import com.localdiary.app.model.EditorDocumentBlock
+import com.localdiary.app.model.EditorDocumentParser
 import com.localdiary.app.model.EntryFormat
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.unit.dp
 import org.commonmark.parser.Parser
 import org.commonmark.renderer.html.HtmlRenderer
 
@@ -19,77 +24,60 @@ fun ArticlePreview(
     format: EntryFormat,
     modifier: Modifier = Modifier,
 ) {
+    val blocks = remember(content) { EditorDocumentParser.parse(content) }
     val parser = remember { Parser.builder().build() }
     val renderer = remember { HtmlRenderer.builder().build() }
-    val htmlBody = remember(content, format) {
-        when (format) {
-            EntryFormat.MARKDOWN -> renderer.render(parser.parse(content))
-            EntryFormat.HTML -> content
+
+    LazyColumn(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        itemsIndexed(blocks) { index, block ->
+            when (block) {
+                is EditorDocumentBlock.Text -> ArticleTextBlock(
+                    text = block.text,
+                    format = format,
+                    parser = parser,
+                    renderer = renderer,
+                )
+
+                is EditorDocumentBlock.Image -> EmbeddedImagePreview(
+                    dataUrl = block.dataUrl,
+                    title = "内嵌图片 ${index + 1}",
+                    subtitle = block.mimeType,
+                )
+            }
         }
     }
-    val html = remember(htmlBody) {
-        """
-        <!doctype html>
-        <html>
-        <head>
-            <meta charset="utf-8" />
-            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-            <style>
-                html, body {
-                    margin: 0;
-                    padding: 0;
-                    background: transparent;
-                    color: #1f2937;
-                    font-family: sans-serif;
-                    line-height: 1.65;
-                    word-break: break-word;
-                    overflow-wrap: anywhere;
-                }
-                body {
-                    padding: 12px 14px 24px;
-                }
-                img {
-                    display: block;
-                    max-width: 100%;
-                    width: auto;
-                    height: auto;
-                    max-height: 72vh;
-                    object-fit: contain;
-                    margin: 16px auto;
-                    border-radius: 16px;
-                }
-                p, ul, ol, blockquote, pre, h1, h2, h3, h4, h5, h6 {
-                    margin-top: 0;
-                    margin-bottom: 12px;
-                }
-                pre {
-                    white-space: pre-wrap;
-                }
-            </style>
-        </head>
-        <body>$htmlBody</body>
-        </html>
-        """.trimIndent()
+}
+
+@Composable
+private fun ArticleTextBlock(
+    text: String,
+    format: EntryFormat,
+    parser: Parser,
+    renderer: HtmlRenderer,
+) {
+    if (text.isBlank()) return
+
+    val textColor = MaterialTheme.colorScheme.onSurface.toArgb()
+    val html = remember(text, format) {
+        when (format) {
+            EntryFormat.MARKDOWN -> renderer.render(parser.parse(text))
+            EntryFormat.HTML -> text
+        }
     }
-    var lastHtml by remember { mutableStateOf("") }
 
     AndroidView(
-        modifier = modifier,
         factory = { context ->
-            WebView(context).apply {
-                setBackgroundColor(Color.TRANSPARENT)
-                settings.loadsImagesAutomatically = true
-                settings.allowFileAccess = false
-                settings.javaScriptEnabled = false
-                settings.useWideViewPort = true
-                settings.loadWithOverviewMode = true
+            TextView(context).apply {
+                textSize = 16f
+                setLineSpacing(0f, 1.35f)
             }
         },
         update = { view ->
-            if (lastHtml != html) {
-                lastHtml = html
-                view.loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
-            }
+            view.setTextColor(textColor)
+            view.text = HtmlCompat.fromHtml(html, HtmlCompat.FROM_HTML_MODE_COMPACT)
         },
     )
 }

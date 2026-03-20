@@ -18,12 +18,15 @@ import com.localdiary.app.data.local.entity.StylePresetEntity
 import com.localdiary.app.data.local.entity.VersionSnapshotEntity
 import com.localdiary.app.data.settings.AiSettingsRepository
 import com.localdiary.app.data.transfer.TransferManager
+import com.localdiary.app.domain.emotion.EmotionCenterProjector
+import com.localdiary.app.domain.browser.EntryPreviewFormatter
 import com.localdiary.app.domain.report.MoodReportGenerator
 import com.localdiary.app.model.AppStorageSettings
 import com.localdiary.app.model.AiEndpointConfig
 import com.localdiary.app.model.EmbeddedImageParser
 import com.localdiary.app.model.EntryBrowserItem
 import com.localdiary.app.model.EmotionAnalysis
+import com.localdiary.app.model.EmotionCenterItem
 import com.localdiary.app.model.EntryEmotionSummary
 import com.localdiary.app.model.EntryDocument
 import com.localdiary.app.model.EntryFormat
@@ -74,8 +77,12 @@ class DiaryRepository(
             .groupBy { it.entryId }
             .mapValues { (_, items) -> items.maxByOrNull { it.createdAt } }
         entries.map { entry ->
+            val meta = entryToModel(entry)
             EntryBrowserItem(
-                meta = entryToModel(entry),
+                meta = meta,
+                previewText = runCatching {
+                    EntryPreviewFormatter.buildPreview(fileStore.readContent(meta.filePath))
+                }.getOrDefault("暂无正文摘要"),
                 latestEmotion = latestByEntry[entry.id]?.let { analysis ->
                     EntryEmotionSummary(
                         labels = json.decodeFromString(analysis.labelsJson),
@@ -89,6 +96,16 @@ class DiaryRepository(
 
     fun observeReports(): Flow<List<MoodReport>> = moodReportDao.observeAll().map { reports ->
         reports.map(::reportToModel)
+    }
+
+    fun observeEmotionCenterItems(): Flow<List<EmotionCenterItem>> = combine(
+        entryDao.observeAll(),
+        emotionDao.observeAll(),
+    ) { entries, analyses ->
+        EmotionCenterProjector.project(
+            entries = entries.map(::entryToModel),
+            analyses = analyses.map(::analysisToModel),
+        )
     }
 
     fun observeStyles(): Flow<List<StylePreset>> = styleDao.observeAll().map { styles ->
@@ -226,21 +243,49 @@ class DiaryRepository(
     suspend fun reviewEntry(entryId: String): ReviewResult {
         val config = aiSettingsRepository.load()
         val document = loadDocument(entryId)
-        return llmProvider.review(config, document.content, document.meta.format)
+        val prepared = EmbeddedImageParser.sanitizeForLlm(document.content)
+        val result = llmProvider.review(
+            config = config,
+            content = prepared.content,
+            targetFormat = document.meta.format,
+            embeddedImagePlaceholders = prepared.placeholders,
+        )
+        return result.copy(
+            candidateContent = EmbeddedImageParser.restorePlaceholders(result.candidateContent, prepared),
+        )
     }
 
     suspend fun reviewContent(
         content: String,
-        format: EntryFormat,
+        targetFormat: EntryFormat,
     ): ReviewResult {
         val config = aiSettingsRepository.load()
-        return llmProvider.review(config, content, format)
+        val prepared = EmbeddedImageParser.sanitizeForLlm(content)
+        val result = llmProvider.review(
+            config = config,
+            content = prepared.content,
+            targetFormat = targetFormat,
+            embeddedImagePlaceholders = prepared.placeholders,
+        )
+        return result.copy(
+            candidateContent = EmbeddedImageParser.restorePlaceholders(result.candidateContent, prepared),
+        )
     }
 
     suspend fun polishEntry(entryId: String, preset: StylePreset): PolishCandidate {
         val config = aiSettingsRepository.load()
         val document = loadDocument(entryId)
-        return llmProvider.polish(config, document.content, document.meta.format, preset)
+        val prepared = EmbeddedImageParser.sanitizeForLlm(document.content)
+        val result = llmProvider.polish(
+            config = config,
+            content = prepared.content,
+            format = document.meta.format,
+            preset = preset,
+            embeddedImagePlaceholders = prepared.placeholders,
+        )
+        return result.copy(
+            content = EmbeddedImageParser.restorePlaceholders(result.content, prepared),
+        )
     }
 
     suspend fun polishContent(
@@ -249,17 +294,29 @@ class DiaryRepository(
         preset: StylePreset,
     ): PolishCandidate {
         val config = aiSettingsRepository.load()
-        return llmProvider.polish(config, content, format, preset)
+        val prepared = EmbeddedImageParser.sanitizeForLlm(content)
+        val result = llmProvider.polish(
+            config = config,
+            content = prepared.content,
+            format = format,
+            preset = preset,
+            embeddedImagePlaceholders = prepared.placeholders,
+        )
+        return result.copy(
+            content = EmbeddedImageParser.restorePlaceholders(result.content, prepared),
+        )
     }
 
     suspend fun analyzeEntry(entryId: String): EmotionAnalysis {
         val config = aiSettingsRepository.load()
         val document = loadDocument(entryId)
+        val prepared = EmbeddedImageParser.sanitizeForLlm(document.content)
         val result = llmProvider.analyzePsychology(
             config = config,
-            content = document.content,
+            content = prepared.content,
             format = document.meta.format,
-            imageDataUrls = EmbeddedImageParser.extractDataUrls(document.content),
+            imageDataUrls = prepared.imageDataUrls,
+            embeddedImagePlaceholders = prepared.placeholders,
         )
         val entity = result.toEntity(entryId)
         emotionDao.insert(entity)
@@ -272,20 +329,28 @@ class DiaryRepository(
         format: EntryFormat,
     ): EmotionAnalysis {
         val config = aiSettingsRepository.load()
+        val prepared = EmbeddedImageParser.sanitizeForLlm(content)
         val result = llmProvider.analyzePsychology(
             config = config,
-            content = content,
+            content = prepared.content,
             format = format,
-            imageDataUrls = EmbeddedImageParser.extractDataUrls(content),
+            imageDataUrls = prepared.imageDataUrls,
+            embeddedImagePlaceholders = prepared.placeholders,
         )
         val entity = result.toEntity(entryId)
         emotionDao.insert(entity)
         return analysisToModel(entity)
     }
 
-    suspend fun applyCandidate(entryId: String, content: String, source: String) {
+    suspend fun applyCandidate(
+        entryId: String,
+        content: String,
+        source: String,
+        targetFormat: EntryFormat? = null,
+    ) {
         val entry = entryDao.getById(entryId) ?: error("Entry not found.")
         val format = EntryFormat.valueOf(entry.format)
+        val resolvedTargetFormat = targetFormat ?: format
         val previousContent = fileStore.readContent(entry.filePath)
         val versionPath = fileStore.saveVersion(entryId, format, previousContent, source)
         versionDao.insert(
@@ -298,8 +363,21 @@ class DiaryRepository(
                 createdAt = System.currentTimeMillis(),
             ),
         )
-        fileStore.overwrite(entry.filePath, content)
-        entryDao.update(entry.copy(updatedAt = System.currentTimeMillis()))
+        val updatedPath = fileStore.overwriteEntry(
+            entryId = entryId,
+            currentPath = entry.filePath,
+            currentFormat = format,
+            targetFormat = resolvedTargetFormat,
+            content = content,
+            storageSettings = aiSettingsRepository.loadStorageSettings(),
+        )
+        entryDao.update(
+            entry.copy(
+                format = resolvedTargetFormat.name,
+                filePath = updatedPath,
+                updatedAt = System.currentTimeMillis(),
+            ),
+        )
     }
 
     suspend fun generateReport(period: ReportPeriod): MoodReport {

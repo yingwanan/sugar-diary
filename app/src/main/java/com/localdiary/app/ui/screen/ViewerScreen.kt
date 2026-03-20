@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -22,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.localdiary.app.ui.components.ArticlePreview
 import com.localdiary.app.ui.viewmodel.ViewerViewModel
@@ -35,6 +37,7 @@ fun ViewerScreen(
     viewModel: ViewerViewModel,
     onNavigateBack: () -> Unit,
     onEditEntry: (String) -> Unit,
+    onOpenEmotionCenter: () -> Unit,
 ) {
     val state = viewModel.uiState
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -129,11 +132,19 @@ fun ViewerScreen(
                                 Text("标签: ${document.meta.tags.joinToString()}")
                             }
                             state.latestAnalysis?.let { analysis ->
-                                Text("最近心情: ${analysis.labels.joinToString()}")
-                                Text(analysis.summary)
+                                Text(
+                                    "最近心情: ${analysis.labels.joinToString()} · ${analysis.summary}",
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
                             }
-                            Button(onClick = { onEditEntry(document.meta.id) }) {
-                                Text("编辑此文章")
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(onClick = { onEditEntry(document.meta.id) }) {
+                                    Text("编辑此文章")
+                                }
+                                TextButton(onClick = onOpenEmotionCenter) {
+                                    Text("情绪中心")
+                                }
                             }
                         }
                     }

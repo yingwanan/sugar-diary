@@ -5,11 +5,13 @@ import android.graphics.BitmapFactory
 import android.util.Base64
 import android.util.LruCache
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -55,21 +57,33 @@ fun EmbeddedImagePreview(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(180.dp),
+                modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center,
             ) {
-                val currentBitmap = bitmap
-                if (currentBitmap != null) {
-                    Image(
-                        bitmap = currentBitmap.asImageBitmap(),
-                        contentDescription = title,
-                        modifier = Modifier.fillMaxWidth(),
-                        contentScale = ContentScale.Crop,
-                    )
-                } else {
-                    Text("正在生成缩略图…")
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    val currentBitmap = bitmap
+                    if (currentBitmap != null) {
+                        val targetHeight = (maxWidth * currentBitmap.height.toFloat() / currentBitmap.width.toFloat())
+                            .coerceIn(140.dp, 420.dp)
+                        Image(
+                            bitmap = currentBitmap.asImageBitmap(),
+                            contentDescription = title,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(targetHeight)
+                                .heightIn(max = 420.dp),
+                            contentScale = ContentScale.Fit,
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(180.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text("正在生成缩略图…")
+                        }
+                    }
                 }
             }
             Text(title, style = MaterialTheme.typography.titleMedium)

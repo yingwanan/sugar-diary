@@ -17,8 +17,8 @@ import kotlinx.coroutines.launch
 
 data class BrowserUiState(
     val loading: Boolean = true,
-    val titleQuery: String = "",
-    val dateQuery: String = "",
+    val query: String = "",
+    val isSearchExpanded: Boolean = false,
     val category: BrowserCategory = BrowserCategory.ALL,
     val selectedTag: String? = null,
     val selectedMood: String? = null,
@@ -46,13 +46,17 @@ class BrowserViewModel(
         }
     }
 
-    fun updateTitleQuery(value: String) {
-        uiState = uiState.copy(titleQuery = value)
+    fun updateQuery(value: String) {
+        uiState = uiState.copy(query = value)
         rebuildState()
     }
 
-    fun updateDateQuery(value: String) {
-        uiState = uiState.copy(dateQuery = value)
+    fun toggleSearch() {
+        val expanded = !uiState.isSearchExpanded
+        uiState = uiState.copy(
+            isSearchExpanded = expanded,
+            query = if (expanded) uiState.query else "",
+        )
         rebuildState()
     }
 
@@ -131,8 +135,7 @@ class BrowserViewModel(
     private fun rebuildState() {
         val filtered = EntryBrowserFilter.filter(
             items = allItems,
-            titleQuery = uiState.titleQuery,
-            dateQuery = uiState.dateQuery,
+            query = uiState.query,
             selectedTag = uiState.selectedTag,
             selectedMood = uiState.selectedMood,
             selectedTimeBucket = uiState.selectedTimeBucket,

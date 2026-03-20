@@ -24,11 +24,15 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.localdiary.app.di.AppContainer
 import com.localdiary.app.ui.screen.BrowserScreen
+import com.localdiary.app.ui.screen.EmotionCenterScreen
+import com.localdiary.app.ui.screen.EmotionDetailScreen
 import com.localdiary.app.ui.screen.EditorScreen
 import com.localdiary.app.ui.screen.SettingsScreen
 import com.localdiary.app.ui.screen.TimelineScreen
 import com.localdiary.app.ui.screen.ViewerScreen
 import com.localdiary.app.ui.viewmodel.BrowserViewModel
+import com.localdiary.app.ui.viewmodel.EmotionCenterViewModel
+import com.localdiary.app.ui.viewmodel.EmotionDetailViewModel
 import com.localdiary.app.ui.viewmodel.EditorViewModel
 import com.localdiary.app.ui.viewmodel.SettingsViewModel
 import com.localdiary.app.ui.viewmodel.TimelineViewModel
@@ -37,9 +41,11 @@ import kotlinx.coroutines.flow.collectLatest
 
 private const val TIMELINE_ROUTE = "timeline"
 private const val BROWSER_ROUTE = "browser"
+private const val EMOTION_ROUTE = "emotion"
 private const val SETTINGS_ROUTE = "settings"
 private const val EDITOR_ROUTE = "editor"
 private const val VIEWER_ROUTE = "viewer"
+private const val EMOTION_DETAIL_ROUTE = "emotion-detail"
 
 @Composable
 fun DiaryAppRoot(
@@ -49,7 +55,7 @@ fun DiaryAppRoot(
     val snackbarHostState = remember { SnackbarHostState() }
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
-    val topLevelRoutes = listOf(TIMELINE_ROUTE, BROWSER_ROUTE, SETTINGS_ROUTE)
+    val topLevelRoutes = listOf(TIMELINE_ROUTE, BROWSER_ROUTE, EMOTION_ROUTE, SETTINGS_ROUTE)
 
     LaunchedEffect(container.uiMessageManager) {
         container.uiMessageManager.messages.collectLatest { event ->
@@ -65,6 +71,7 @@ fun DiaryAppRoot(
                     listOf(
                         TIMELINE_ROUTE to "时间轴",
                         BROWSER_ROUTE to "浏览",
+                        EMOTION_ROUTE to "情绪",
                         SETTINGS_ROUTE to "设置",
                     ).forEach { (route, label) ->
                         val selected = currentDestination?.hierarchy?.any { it.route == route } == true
@@ -84,6 +91,7 @@ fun DiaryAppRoot(
                                     when (route) {
                                         TIMELINE_ROUTE -> "记"
                                         BROWSER_ROUTE -> "览"
+                                        EMOTION_ROUTE -> "绪"
                                         else -> "设"
                                     },
                                 )
@@ -122,6 +130,40 @@ fun DiaryAppRoot(
                         },
                     )
                 }
+                composable(EMOTION_ROUTE) {
+                    val viewModel: EmotionCenterViewModel = viewModel(
+                        factory = EmotionCenterViewModel.factory(container.diaryRepository, container.uiMessageManager),
+                    )
+                    EmotionCenterScreen(
+                        viewModel = viewModel,
+                        onOpenEntry = { entryId ->
+                            navController.navigate("$VIEWER_ROUTE/$entryId")
+                        },
+                        onEditEntry = { entryId ->
+                            navController.navigate("$EDITOR_ROUTE/$entryId")
+                        },
+                        onOpenEmotionDetail = { entryId ->
+                            navController.navigate("$EMOTION_DETAIL_ROUTE/$entryId")
+                        },
+                    )
+                }
+                composable("$EMOTION_DETAIL_ROUTE/{entryId}") { entryBackStack ->
+                    val entryId = entryBackStack.arguments?.getString("entryId").orEmpty()
+                    val viewModel: EmotionDetailViewModel = viewModel(
+                        key = "emotion-detail-$entryId",
+                        factory = EmotionDetailViewModel.factory(container.diaryRepository, container.uiMessageManager, entryId),
+                    )
+                    EmotionDetailScreen(
+                        viewModel = viewModel,
+                        onNavigateBack = { navController.popBackStack() },
+                        onOpenEntry = { targetEntryId ->
+                            navController.navigate("$VIEWER_ROUTE/$targetEntryId")
+                        },
+                        onEditEntry = { targetEntryId ->
+                            navController.navigate("$EDITOR_ROUTE/$targetEntryId")
+                        },
+                    )
+                }
                 composable("$VIEWER_ROUTE/{entryId}") { entryBackStack ->
                     val entryId = entryBackStack.arguments?.getString("entryId").orEmpty()
                     val viewModel: ViewerViewModel = viewModel(
@@ -134,6 +176,9 @@ fun DiaryAppRoot(
                         onEditEntry = { targetEntryId ->
                             navController.navigate("$EDITOR_ROUTE/$targetEntryId")
                         },
+                        onOpenEmotionCenter = {
+                            navController.navigate(EMOTION_ROUTE)
+                        },
                     )
                 }
                 composable("$EDITOR_ROUTE/{entryId}") { entryBackStack ->
@@ -145,6 +190,12 @@ fun DiaryAppRoot(
                     EditorScreen(
                         viewModel = viewModel,
                         onNavigateBack = { navController.popBackStack() },
+                        onOpenEmotionCenter = {
+                            navController.navigate(EMOTION_ROUTE)
+                        },
+                        onOpenEmotionDetail = {
+                            navController.navigate("$EMOTION_DETAIL_ROUTE/$entryId")
+                        },
                     )
                 }
                 composable(SETTINGS_ROUTE) {

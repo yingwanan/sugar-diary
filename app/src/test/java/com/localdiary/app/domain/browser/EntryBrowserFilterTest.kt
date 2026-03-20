@@ -64,8 +64,7 @@ class EntryBrowserFilterTest {
     fun `filter matches title query`() {
         val result = EntryBrowserFilter.filter(
             items = items,
-            titleQuery = "工作",
-            dateQuery = "",
+            query = "工作",
             selectedTag = null,
             selectedMood = null,
             selectedTimeBucket = null,
@@ -79,8 +78,7 @@ class EntryBrowserFilterTest {
     fun `filter matches date query by month`() {
         val result = EntryBrowserFilter.filter(
             items = items,
-            titleQuery = "",
-            dateQuery = "2026-02",
+            query = "2026-02",
             selectedTag = null,
             selectedMood = null,
             selectedTimeBucket = null,
@@ -94,8 +92,7 @@ class EntryBrowserFilterTest {
     fun `filter matches selected mood from latest analysis`() {
         val result = EntryBrowserFilter.filter(
             items = items,
-            titleQuery = "",
-            dateQuery = "",
+            query = "",
             selectedTag = null,
             selectedMood = "平静",
             selectedTimeBucket = null,
@@ -103,6 +100,57 @@ class EntryBrowserFilterTest {
         )
 
         assertEquals(listOf("a"), result.map { it.meta.id })
+    }
+
+    @Test
+    fun `filter matches combined title and date search`() {
+        val titleResult = EntryBrowserFilter.filter(
+            items = items,
+            query = "春天",
+            selectedTag = null,
+            selectedMood = null,
+            selectedTimeBucket = null,
+            now = now,
+        )
+        val dateResult = EntryBrowserFilter.filter(
+            items = items,
+            query = "2026-03-10",
+            selectedTag = null,
+            selectedMood = null,
+            selectedTimeBucket = null,
+            now = now,
+        )
+
+        assertEquals(listOf("a"), titleResult.map { it.meta.id })
+        assertEquals(listOf("b"), dateResult.map { it.meta.id })
+    }
+
+    @Test
+    fun `filter matches exact day without leaking other dates`() {
+        val result = EntryBrowserFilter.filter(
+            items = items,
+            query = "2026-03-1",
+            selectedTag = null,
+            selectedMood = null,
+            selectedTimeBucket = null,
+            now = now,
+        )
+
+        assertEquals(emptyList<String>(), result.map { it.meta.id })
+    }
+
+    @Test
+    fun `filter matches year query`() {
+        val result = EntryBrowserFilter.filter(
+            items = items,
+            query = "2026",
+            selectedTag = null,
+            selectedMood = null,
+            selectedTimeBucket = null,
+            now = now,
+        )
+
+        assertEquals(listOf("a", "b", "c"), result.map { it.meta.id })
     }
 
     @Test
