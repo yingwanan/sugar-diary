@@ -10,6 +10,7 @@ import com.localdiary.app.model.PsychologyAnalysisResult
 import com.localdiary.app.model.ReportPeriod
 import com.localdiary.app.model.ReviewResult
 import com.localdiary.app.model.StylePreset
+import kotlinx.coroutines.flow.Flow
 
 interface LlmProvider {
     suspend fun testConnection(config: AiEndpointConfig): String
@@ -51,4 +52,16 @@ interface LlmProvider {
         messages: List<PsychologyChatMessage>,
         userMessage: String,
     ): PsychologyChatResult
+
+    suspend fun completePsychologyText(
+        config: AiEndpointConfig,
+        systemPrompt: String,
+        userPrompt: String,
+    ): String
+
+    fun streamPsychologyText(
+        config: AiEndpointConfig,
+        systemPrompt: String,
+        userPrompt: String,
+    ): Flow<String>
 }

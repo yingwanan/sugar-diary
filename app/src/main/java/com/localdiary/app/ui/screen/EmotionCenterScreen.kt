@@ -22,8 +22,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import com.localdiary.app.model.EmotionCenterItem
+import com.localdiary.app.ui.components.MarkdownText
 import com.localdiary.app.ui.components.OverviewHeroCard
 import com.localdiary.app.ui.components.OverviewHeroChip
+import com.localdiary.app.ui.components.PsychologyAgentSelector
 import com.localdiary.app.ui.viewmodel.EmotionCenterViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -37,6 +39,7 @@ fun EmotionCenterScreen(
     onOpenEmotionDetail: (String) -> Unit,
     onOpenPsychologyChat: (String) -> Unit,
     onOpenReports: () -> Unit,
+    onOpenProfile: () -> Unit,
 ) {
     val state = viewModel.uiState
 
@@ -58,6 +61,9 @@ fun EmotionCenterScreen(
             title = "心理洞察",
             subtitle = "这里统一查看单篇心理分析，并进入周报或月报。",
             actions = {
+                TextButton(onClick = onOpenProfile) {
+                    Text("用户画像")
+                }
                 TextButton(onClick = onOpenReports) {
                     Text("周期报告")
                 }
@@ -82,6 +88,12 @@ fun EmotionCenterScreen(
             } else {
                 null
             },
+        )
+
+        PsychologyAgentSelector(
+            selectedAgentId = state.selectedAgentId,
+            onSelect = viewModel::selectAgent,
+            modifier = Modifier.fillMaxWidth(),
         )
 
         state.error?.let {
@@ -156,10 +168,7 @@ private fun EmotionEntryCard(
                     "最近状态: ${analysis.labels.joinToString()}",
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                Text(
-                    analysis.summary,
-                    maxLines = 2,
-                )
+                MarkdownText(analysis.summary)
                 Text(
                     "分析于 ${formatTimestamp(analysis.createdAt)}",
                     style = MaterialTheme.typography.bodySmall,

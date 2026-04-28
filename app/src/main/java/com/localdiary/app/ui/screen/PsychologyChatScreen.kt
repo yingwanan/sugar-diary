@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import com.localdiary.app.model.PsychologyChatMessage
+import com.localdiary.app.ui.components.MarkdownText
 import com.localdiary.app.model.PsychologyChatRole
 import com.localdiary.app.ui.viewmodel.PsychologyChatViewModel
 
@@ -121,7 +122,7 @@ private fun PsychologyChatBubble(message: PsychologyChatMessage) {
     ) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(if (isUser) "我" else "心理 Agent", style = MaterialTheme.typography.labelMedium)
-            Text(message.content)
+            if (isUser) Text(message.content) else MarkdownText(message.content)
         }
     }
 }

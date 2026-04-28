@@ -15,4 +15,6 @@ data class EmotionAnalysis(
     val relationshipSignals: List<String> = emptyList(),
     val defenseMechanisms: List<String> = emptyList(),
     val strengths: List<String> = emptyList(),
+    val bodyStressSignals: List<String> = emptyList(),
+    val riskNotes: List<String> = emptyList(),
 )

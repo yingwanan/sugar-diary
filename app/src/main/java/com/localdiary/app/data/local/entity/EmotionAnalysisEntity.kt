@@ -21,4 +21,6 @@ data class EmotionAnalysisEntity(
     val relationshipSignalsJson: String = "[]",
     val defenseMechanismsJson: String = "[]",
     val strengthsJson: String = "[]",
+    val bodyStressSignalsJson: String = "[]",
+    val riskNotesJson: String = "[]",
 )

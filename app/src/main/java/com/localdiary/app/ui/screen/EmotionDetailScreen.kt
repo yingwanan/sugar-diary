@@ -23,6 +23,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import com.localdiary.app.model.EmotionAnalysis
+import com.localdiary.app.model.PsychologyAgentProcessEvent
+import com.localdiary.app.ui.components.MarkdownText
+import com.localdiary.app.ui.components.PsychologyAgentSelector
 import com.localdiary.app.ui.viewmodel.EmotionDetailViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -101,12 +104,17 @@ fun EmotionDetailScreen(
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                 }
+                                PsychologyAgentSelector(
+                                    selectedAgentId = state.selectedAgentId,
+                                    onSelect = viewModel::selectAgent,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Button(
                                         onClick = viewModel::analyzeEntry,
                                         enabled = !state.working,
                                     ) {
-                                        Text(if (state.working) "分析中..." else "重新分析")
+                                        Text(if (state.working) "分析中..." else "开始分析")
                                     }
                                     TextButton(onClick = { onOpenEntry(document.meta.id) }) {
                                         Text("查看文章")
@@ -119,6 +127,15 @@ fun EmotionDetailScreen(
                                     }
                                 }
                             }
+                        }
+                    }
+
+                    if (state.runtimeEvents.isNotEmpty()) {
+                        item("agent-process-title") {
+                            Text(if (state.working) "Agent 运行中" else "Agent 过程摘要", style = MaterialTheme.typography.titleMedium)
+                        }
+                        items(state.runtimeEvents, key = { it.id }) { event ->
+                            AgentProcessEventCard(event)
                         }
                     }
 
@@ -170,15 +187,17 @@ private fun EmotionAnalysisCard(
             Text(title, style = MaterialTheme.typography.titleMedium)
             Text("心理状态: ${analysis.labels.joinToString()}")
             Text("强度: ${analysis.intensity}/100")
-            Text(analysis.summary)
+            MarkdownText(analysis.summary)
             AnalysisSection("触发点", analysis.triggers)
             AnalysisSection("认知模式", analysis.cognitivePatterns)
             AnalysisSection("深层需求", analysis.needs)
             AnalysisSection("关系线索", analysis.relationshipSignals)
             AnalysisSection("防御/应对", analysis.defenseMechanisms)
             AnalysisSection("资源优势", analysis.strengths)
+            AnalysisSection("身体压力", analysis.bodyStressSignals)
+            AnalysisSection("风险注意", analysis.riskNotes)
             analysis.suggestions.forEach { suggestion ->
-                Text("• $suggestion")
+                MarkdownText("• $suggestion")
             }
             if (analysis.safetyFlag) {
                 Text("检测到高风险内容，请优先联系现实中的可信支持或专业帮助。")
@@ -187,6 +206,22 @@ private fun EmotionAnalysisCard(
                 "分析于 ${formatEmotionTimestamp(analysis.createdAt)}",
                 style = MaterialTheme.typography.bodySmall,
             )
+        }
+    }
+}
+
+@Composable
+private fun AgentProcessEventCard(event: PsychologyAgentProcessEvent) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text("${event.agentName} · ${event.title}", style = MaterialTheme.typography.titleSmall)
+            MarkdownText(event.contentMarkdown)
         }
     }
 }

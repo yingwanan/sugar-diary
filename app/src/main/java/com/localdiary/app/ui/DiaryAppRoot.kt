@@ -29,6 +29,7 @@ import com.localdiary.app.ui.screen.EmotionDetailScreen
 import com.localdiary.app.ui.screen.EmotionReportsScreen
 import com.localdiary.app.ui.screen.EditorScreen
 import com.localdiary.app.ui.screen.PsychologyChatScreen
+import com.localdiary.app.ui.screen.PsychologyProfileScreen
 import com.localdiary.app.ui.screen.SettingsScreen
 import com.localdiary.app.ui.screen.TimelineScreen
 import com.localdiary.app.ui.screen.ViewerScreen
@@ -38,6 +39,7 @@ import com.localdiary.app.ui.viewmodel.EmotionDetailViewModel
 import com.localdiary.app.ui.viewmodel.EmotionReportsViewModel
 import com.localdiary.app.ui.viewmodel.EditorViewModel
 import com.localdiary.app.ui.viewmodel.PsychologyChatViewModel
+import com.localdiary.app.ui.viewmodel.PsychologyProfileViewModel
 import com.localdiary.app.ui.viewmodel.SettingsViewModel
 import com.localdiary.app.ui.viewmodel.TimelineViewModel
 import com.localdiary.app.ui.viewmodel.ViewerViewModel
@@ -52,6 +54,7 @@ private const val VIEWER_ROUTE = "viewer"
 private const val EMOTION_DETAIL_ROUTE = "emotion-detail"
 private const val EMOTION_REPORTS_ROUTE = "emotion-reports"
 private const val PSYCHOLOGY_CHAT_ROUTE = "psychology-chat"
+private const val PSYCHOLOGY_PROFILE_ROUTE = "psychology-profile"
 
 @Composable
 fun DiaryAppRoot(
@@ -169,6 +172,18 @@ fun DiaryAppRoot(
                         onOpenReports = {
                             navController.navigate(EMOTION_REPORTS_ROUTE)
                         },
+                        onOpenProfile = {
+                            navController.navigate(PSYCHOLOGY_PROFILE_ROUTE)
+                        },
+                    )
+                }
+                composable(PSYCHOLOGY_PROFILE_ROUTE) {
+                    val viewModel: PsychologyProfileViewModel = viewModel(
+                        factory = PsychologyProfileViewModel.factory(container.diaryRepository, container.uiMessageManager),
+                    )
+                    PsychologyProfileScreen(
+                        viewModel = viewModel,
+                        onNavigateBack = { navController.popBackStack() },
                     )
                 }
                 composable(EMOTION_REPORTS_ROUTE) {

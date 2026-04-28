@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import com.localdiary.app.model.MoodReport
+import com.localdiary.app.ui.components.MarkdownText
 import com.localdiary.app.model.ReportPeriod
 import com.localdiary.app.model.label
 import com.localdiary.app.ui.viewmodel.EmotionReportsViewModel
@@ -169,10 +170,10 @@ private fun ReportCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(report.period.label, style = MaterialTheme.typography.titleMedium)
-            Text(report.summary)
+            MarkdownText(report.summary)
             Text("主导心理: ${report.dominantMoods.joinToString()}")
             report.advice.forEach { advice ->
-                Text("• $advice")
+                MarkdownText("• $advice")
             }
             Text(
                 "生成于 ${formatReportTimestamp(report.createdAt)}",

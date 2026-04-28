@@ -17,6 +17,9 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
@@ -270,6 +273,32 @@ class OpenAiCompatibleLlmProvider(
             .getOrElse { PsychologyChatResult(reply = payload) }
     }
 
+
+
+    override suspend fun completePsychologyText(
+        config: AiEndpointConfig,
+        systemPrompt: String,
+        userPrompt: String,
+    ): String = completeText(
+        endpoint = config.toMainEndpoint(),
+        operationLabel = "心理 Agent",
+        systemPrompt = systemPrompt,
+        userPrompt = userPrompt,
+    )
+
+    override fun streamPsychologyText(
+        config: AiEndpointConfig,
+        systemPrompt: String,
+        userPrompt: String,
+    ): Flow<String> = executeStreamingChatCompletion(
+        endpoint = config.toMainEndpoint(),
+        operationLabel = "心理 Agent 流式回复",
+        messages = listOf(
+            buildTextMessage("system", systemPrompt),
+            buildTextMessage("user", userPrompt),
+        ),
+    )
+
     private suspend fun summarizeImages(
         config: AiEndpointConfig,
         imageDataUrls: List<String>,
@@ -370,6 +399,64 @@ class OpenAiCompatibleLlmProvider(
             error("${operationLabel}失败：${error.message ?: "network error"}")
         }
     }
+
+
+
+    private fun executeStreamingChatCompletion(
+        endpoint: ResolvedEndpoint,
+        operationLabel: String,
+        messages: List<JsonObject>,
+    ): Flow<String> = flow {
+        val client = OkHttpClient.Builder()
+            .connectTimeout(endpoint.requestTimeoutSeconds.toLong(), TimeUnit.SECONDS)
+            .readTimeout(endpoint.requestTimeoutSeconds.toLong(), TimeUnit.SECONDS)
+            .writeTimeout(endpoint.requestTimeoutSeconds.toLong(), TimeUnit.SECONDS)
+            .callTimeout(endpoint.requestTimeoutSeconds.toLong(), TimeUnit.SECONDS)
+            .build()
+
+        val body = json.encodeToString(
+            JsonObject.serializer(),
+            buildJsonObject {
+                put("model", JsonPrimitive(endpoint.model))
+                put("messages", JsonArray(messages))
+                put("temperature", JsonPrimitive(0.3))
+                put("stream", JsonPrimitive(true))
+            },
+        )
+
+        val request = Request.Builder()
+            .url(endpoint.url)
+            .header("Authorization", "Bearer ${endpoint.apiKey}")
+            .header("Accept", "text/event-stream")
+            .header("Content-Type", "application/json")
+            .post(body.toRequestBody("application/json".toMediaType()))
+            .build()
+
+        try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    val errorDetail = response.body?.string().orEmpty().take(200).ifBlank { "No response body" }
+                    error("${operationLabel}失败 (${response.code}): $errorDetail")
+                }
+                val source = response.body?.source() ?: error("${operationLabel}失败：空响应。")
+                while (!source.exhausted()) {
+                    val line = source.readUtf8Line() ?: break
+                    if (!line.startsWith("data:")) continue
+                    val data = line.removePrefix("data:").trim()
+                    if (data == "[DONE]") break
+                    OpenAiStreamParser.parseDataLine(data)?.let { emit(it) }
+                }
+            }
+        } catch (error: UnknownHostException) {
+            error("${operationLabel}失败：无法解析 API 域名，请检查接口地址。")
+        } catch (error: SocketTimeoutException) {
+            error("${operationLabel}超时。请检查网络或提高超时秒数。")
+        } catch (error: SerializationException) {
+            error("${operationLabel}失败：API 返回了不受支持的数据格式。")
+        } catch (error: IOException) {
+            error("${operationLabel}失败：${error.message ?: "network error"}")
+        }
+    }.flowOn(Dispatchers.IO)
 
     private fun extractResponseContent(responseBody: String): String {
         val normalizedBody = responseBody

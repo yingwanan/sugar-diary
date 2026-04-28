@@ -52,6 +52,8 @@ object PsychologyAgentContextBuilder {
         appendList("关系线索", analysis.relationshipSignals)
         appendList("防御机制", analysis.defenseMechanisms)
         appendList("资源优势", analysis.strengths)
+        appendList("身体压力", analysis.bodyStressSignals)
+        appendList("风险注意", analysis.riskNotes)
         appendList("建议", analysis.suggestions)
     }
 

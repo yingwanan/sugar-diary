@@ -45,12 +45,27 @@ import com.localdiary.app.model.ReviewResult
 import com.localdiary.app.model.StorageMode
 import com.localdiary.app.model.StylePreset
 import com.localdiary.app.model.VersionSnapshot
+import com.localdiary.app.data.local.dao.PsychologyAnalysisRunDao
+import com.localdiary.app.data.local.dao.PsychologyAgentProcessEventDao
+import com.localdiary.app.data.local.dao.UserPsychologyProfileDao
+import com.localdiary.app.data.local.entity.PsychologyAnalysisRunEntity
+import com.localdiary.app.data.local.entity.PsychologyAgentProcessEventEntity
+import com.localdiary.app.data.local.entity.UserPsychologyProfileEntity
+import com.localdiary.app.domain.psychology.PsychologyAgentCatalog
+import com.localdiary.app.domain.psychology.PsychologyAgentOrchestrator
+import com.localdiary.app.domain.psychology.UserPsychologyProfileUpdate
+import com.localdiary.app.model.PsychologyAgentPhase
+import com.localdiary.app.model.PsychologyAgentProcessEvent
+import com.localdiary.app.model.PsychologyAgentRuntimeUpdate
+import com.localdiary.app.model.PsychologyAnalysisRunStatus
+import com.localdiary.app.model.UserPsychologyProfile
+import kotlinx.coroutines.flow.flow
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.TemporalAdjusters
 import java.util.UUID
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -63,12 +78,16 @@ class DiaryRepository(
     private val moodReportDao: MoodReportDao,
     private val versionDao: VersionSnapshotDao,
     private val chatDao: PsychologyChatMessageDao,
+    private val runDao: PsychologyAnalysisRunDao,
+    private val eventDao: PsychologyAgentProcessEventDao,
+    private val profileDao: UserPsychologyProfileDao,
     private val fileStore: LocalEntryFileStore,
     private val aiSettingsRepository: AiSettingsRepository,
     private val llmProvider: LlmProvider,
     private val transferManager: TransferManager,
     private val moodReportGenerator: MoodReportGenerator,
     private val embeddedImageService: EmbeddedImageService,
+    private val orchestrator: PsychologyAgentOrchestrator = PsychologyAgentOrchestrator(llmProvider),
     private val json: Json = Json { ignoreUnknownKeys = true },
 ) {
     fun observeEntries(): Flow<List<EntryMeta>> = entryDao.observeAll().map { entries ->
@@ -122,6 +141,109 @@ class DiaryRepository(
         chatDao.observeForEntry(entryId).map { messages ->
             messages.map(::chatMessageToModel)
         }
+
+    fun observeUserProfile(): Flow<UserPsychologyProfile> =
+        profileDao.observe().map { it?.let(::profileToModel) ?: UserPsychologyProfile() }
+
+    suspend fun loadUserProfile(): UserPsychologyProfile =
+        profileDao.get()?.let(::profileToModel) ?: UserPsychologyProfile()
+
+    suspend fun saveUserProfile(profile: UserPsychologyProfile) {
+        val now = System.currentTimeMillis()
+        profileDao.insert(profile.copy(updatedAt = now, userEditedAt = now).toEntity())
+    }
+
+    suspend fun latestAgentEvents(entryId: String): List<PsychologyAgentProcessEvent> {
+        val run = runDao.latestForEntry(entryId) ?: return emptyList()
+        return eventDao.listForRun(run.id).map(::processEventToModel)
+    }
+
+    fun runPsychologyAnalysis(
+        entryId: String,
+        selectedAgentId: String? = null,
+    ): Flow<PsychologyAgentRuntimeUpdate> = flow {
+        val config = aiSettingsRepository.load()
+        require(config.isConfigured) { "请先在设置中配置主模型 API。" }
+        val document = loadDocument(entryId)
+        val prepared = EmbeddedImageParser.sanitizeForLlm(document.content)
+        val latest = latestAnalysis(entryId)
+        val history = emotionDao.getAll().map(::analysisToModel)
+        val profile = loadUserProfile()
+        val runId = UUID.randomUUID().toString()
+        val selectedAgents = PsychologyAgentCatalog.resolveSelection(selectedAgentId).map { it.id }
+        runDao.insert(
+            PsychologyAnalysisRunEntity(
+                id = runId,
+                entryId = entryId,
+                selectedAgentIdsJson = json.encodeToString(selectedAgents),
+                status = PsychologyAnalysisRunStatus.RUNNING.name,
+                startedAt = System.currentTimeMillis(),
+                completedAt = null,
+                finalAnalysisId = null,
+            ),
+        )
+        try {
+            orchestrator.run(
+                config = config,
+                document = document,
+                sanitizedContent = prepared.content,
+                format = document.meta.format,
+                latestAnalysis = latest,
+                historicalAnalyses = history,
+                currentProfile = profile,
+                selectedAgentId = selectedAgentId,
+                runId = runId,
+            ).collect { update ->
+                when (update) {
+                    is PsychologyAgentRuntimeUpdate.Event -> {
+                        val event = update.event
+                        if (event.title == "__RESULT__") {
+                            val parts = event.contentMarkdown.split("\n---PROFILE---\n", limit = 2)
+                            val result = json.decodeFromString<PsychologyAnalysisResult>(parts.first())
+                            val profileUpdate = json.decodeFromString<UserPsychologyProfileUpdate>(parts.getOrElse(1) { "{}" })
+                            val analysisEntity = result.toEntity(entryId)
+                            val mergedProfile = com.localdiary.app.domain.psychology.UserPsychologyProfileMerger.merge(
+                                loadUserProfile(),
+                                profileUpdate,
+                                System.currentTimeMillis(),
+                            )
+                            emotionDao.insert(analysisEntity)
+                            profileDao.insert(mergedProfile.toEntity())
+                            runDao.insert(
+                                PsychologyAnalysisRunEntity(
+                                    id = runId,
+                                    entryId = entryId,
+                                    selectedAgentIdsJson = json.encodeToString(selectedAgents),
+                                    status = PsychologyAnalysisRunStatus.COMPLETED.name,
+                                    startedAt = event.createdAt,
+                                    completedAt = System.currentTimeMillis(),
+                                    finalAnalysisId = analysisEntity.id,
+                                ),
+                            )
+                            emit(PsychologyAgentRuntimeUpdate.Completed(analysisToModel(analysisEntity), mergedProfile, runId))
+                        } else {
+                            if (!event.isPartial) eventDao.insert(event.toEntity())
+                            emit(update)
+                        }
+                    }
+                    is PsychologyAgentRuntimeUpdate.Completed -> emit(update)
+                }
+            }
+        } catch (error: Throwable) {
+            runDao.insert(
+                PsychologyAnalysisRunEntity(
+                    id = runId,
+                    entryId = entryId,
+                    selectedAgentIdsJson = json.encodeToString(selectedAgents),
+                    status = PsychologyAnalysisRunStatus.FAILED.name,
+                    startedAt = System.currentTimeMillis(),
+                    completedAt = System.currentTimeMillis(),
+                    finalAnalysisId = null,
+                ),
+            )
+            throw error
+        }
+    }
 
     suspend fun sendPsychologyChatMessage(entryId: String, message: String): PsychologyChatMessage {
         val trimmed = message.trim()
@@ -295,6 +417,8 @@ class DiaryRepository(
         versionDao.deleteByEntryId(entryId)
         emotionDao.deleteByEntryId(entryId)
         chatDao.deleteByEntryId(entryId)
+        eventDao.deleteByEntryId(entryId)
+        runDao.deleteByEntryId(entryId)
         entryDao.deleteById(entryId)
     }
 
@@ -478,6 +602,9 @@ class DiaryRepository(
             reports = moodReportDao.getAll(),
             versions = versionDao.getAll(),
             psychologyChats = chatDao.getAll(),
+            psychologyRuns = runDao.getAll(),
+            psychologyEvents = eventDao.getAll(),
+            userProfiles = profileDao.getAll(),
         )
     }
 
@@ -539,6 +666,29 @@ class DiaryRepository(
                 ),
             )
         }
+        val runIdMapping = mutableMapOf<String, String>()
+        imported.manifest.psychologyRuns.forEach { run ->
+            val newRunId = UUID.randomUUID().toString()
+            runIdMapping[run.id] = newRunId
+            runDao.insert(
+                run.copy(
+                    id = newRunId,
+                    entryId = idMapping[run.entryId] ?: run.entryId,
+                ),
+            )
+        }
+        imported.manifest.psychologyEvents.forEach { event ->
+            eventDao.insert(
+                event.copy(
+                    id = UUID.randomUUID().toString(),
+                    runId = runIdMapping[event.runId] ?: event.runId,
+                    entryId = idMapping[event.entryId] ?: event.entryId,
+                ),
+            )
+        }
+        imported.manifest.userProfiles.forEach { profile ->
+            profileDao.insert(profile)
+        }
     }
 
     suspend fun exportRaw(resolver: ContentResolver, folderUri: Uri) {
@@ -598,6 +748,8 @@ class DiaryRepository(
         relationshipSignals = json.decodeFromString(entity.relationshipSignalsJson),
         defenseMechanisms = json.decodeFromString(entity.defenseMechanismsJson),
         strengths = json.decodeFromString(entity.strengthsJson),
+        bodyStressSignals = json.decodeFromString(entity.bodyStressSignalsJson),
+        riskNotes = json.decodeFromString(entity.riskNotesJson),
     )
 
     private fun chatMessageToModel(entity: PsychologyChatMessageEntity): PsychologyChatMessage = PsychologyChatMessage(
@@ -606,6 +758,58 @@ class DiaryRepository(
         role = runCatching { PsychologyChatRole.valueOf(entity.role) }.getOrDefault(PsychologyChatRole.ASSISTANT),
         content = entity.content,
         createdAt = entity.createdAt,
+    )
+
+    private fun processEventToModel(entity: PsychologyAgentProcessEventEntity): PsychologyAgentProcessEvent = PsychologyAgentProcessEvent(
+        id = entity.id,
+        runId = entity.runId,
+        entryId = entity.entryId,
+        agentId = entity.agentId,
+        agentName = entity.agentName,
+        phase = runCatching { PsychologyAgentPhase.valueOf(entity.phase) }.getOrDefault(PsychologyAgentPhase.ROUND_ONE),
+        title = entity.title,
+        contentMarkdown = entity.contentMarkdown,
+        sequence = entity.sequence,
+        createdAt = entity.createdAt,
+    )
+
+    private fun PsychologyAgentProcessEvent.toEntity(): PsychologyAgentProcessEventEntity = PsychologyAgentProcessEventEntity(
+        id = id,
+        runId = runId,
+        entryId = entryId,
+        agentId = agentId,
+        agentName = agentName,
+        phase = phase.name,
+        title = title,
+        contentMarkdown = contentMarkdown,
+        sequence = sequence,
+        createdAt = createdAt,
+    )
+
+    private fun profileToModel(entity: UserPsychologyProfileEntity): UserPsychologyProfile = UserPsychologyProfile(
+        triggers = json.decodeFromString(entity.triggersJson),
+        cognitivePatterns = json.decodeFromString(entity.cognitivePatternsJson),
+        needs = json.decodeFromString(entity.needsJson),
+        relationshipPatterns = json.decodeFromString(entity.relationshipPatternsJson),
+        defensePatterns = json.decodeFromString(entity.defensePatternsJson),
+        bodyStressSignals = json.decodeFromString(entity.bodyStressSignalsJson),
+        strengths = json.decodeFromString(entity.strengthsJson),
+        riskNotes = json.decodeFromString(entity.riskNotesJson),
+        updatedAt = entity.updatedAt,
+        userEditedAt = entity.userEditedAt,
+    )
+
+    private fun UserPsychologyProfile.toEntity(): UserPsychologyProfileEntity = UserPsychologyProfileEntity(
+        triggersJson = json.encodeToString(triggers),
+        cognitivePatternsJson = json.encodeToString(cognitivePatterns),
+        needsJson = json.encodeToString(needs),
+        relationshipPatternsJson = json.encodeToString(relationshipPatterns),
+        defensePatternsJson = json.encodeToString(defensePatterns),
+        bodyStressSignalsJson = json.encodeToString(bodyStressSignals),
+        strengthsJson = json.encodeToString(strengths),
+        riskNotesJson = json.encodeToString(riskNotes),
+        updatedAt = updatedAt,
+        userEditedAt = userEditedAt,
     )
 
     private fun reportToModel(entity: MoodReportEntity): MoodReport? {
@@ -647,6 +851,8 @@ class DiaryRepository(
         relationshipSignalsJson = json.encodeToString(relationshipSignals),
         defenseMechanismsJson = json.encodeToString(defenseMechanisms),
         strengthsJson = json.encodeToString(strengths),
+        bodyStressSignalsJson = json.encodeToString(bodyStressSignals),
+        riskNotesJson = json.encodeToString(riskNotes),
     )
 
     private fun MoodReport.toEntity(): MoodReportEntity = MoodReportEntity(
