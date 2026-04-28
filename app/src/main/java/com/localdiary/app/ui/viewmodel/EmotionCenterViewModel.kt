@@ -9,7 +9,6 @@ import androidx.lifecycle.viewModelScope
 import com.localdiary.app.data.DiaryRepository
 import com.localdiary.app.domain.emotion.EmotionCenterFilter
 import com.localdiary.app.model.EmotionCenterItem
-import com.localdiary.app.model.PsychologyAgentRuntimeUpdate
 import com.localdiary.app.ui.UiMessageManager
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -19,8 +18,6 @@ data class EmotionCenterUiState(
     val query: String = "",
     val isSearchExpanded: Boolean = false,
     val items: List<EmotionCenterItem> = emptyList(),
-    val workingEntryId: String? = null,
-    val selectedAgentId: String? = null,
     val error: String? = null,
 )
 
@@ -54,26 +51,6 @@ class EmotionCenterViewModel(
             query = if (expanded) uiState.query else "",
         )
         rebuildState()
-    }
-
-    fun selectAgent(agentId: String?) {
-        uiState = uiState.copy(selectedAgentId = agentId)
-    }
-
-    fun analyzeEntry(entryId: String) {
-        viewModelScope.launch {
-            uiState = uiState.copy(workingEntryId = entryId, error = null)
-            runCatching {
-                repository.runPsychologyAnalysis(entryId, uiState.selectedAgentId).collect { update ->
-                    if (update is PsychologyAgentRuntimeUpdate.Completed) {
-                        uiMessageManager.show("心理分析已更新。")
-                    }
-                }
-            }.onFailure { error ->
-                uiState = uiState.copy(error = error.message ?: "心理分析失败。")
-            }
-            uiState = uiState.copy(workingEntryId = null)
-        }
     }
 
     private fun rebuildState() {

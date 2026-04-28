@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.IconButton
@@ -25,7 +24,6 @@ import com.localdiary.app.model.EmotionCenterItem
 import com.localdiary.app.ui.components.MarkdownText
 import com.localdiary.app.ui.components.OverviewHeroCard
 import com.localdiary.app.ui.components.OverviewHeroChip
-import com.localdiary.app.ui.components.PsychologyAgentSelector
 import com.localdiary.app.ui.viewmodel.EmotionCenterViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -90,12 +88,6 @@ fun EmotionCenterScreen(
             },
         )
 
-        PsychologyAgentSelector(
-            selectedAgentId = state.selectedAgentId,
-            onSelect = viewModel::selectAgent,
-            modifier = Modifier.fillMaxWidth(),
-        )
-
         state.error?.let {
             EmotionStatusBanner(
                 title = "心理分析失败",
@@ -123,8 +115,6 @@ fun EmotionCenterScreen(
             items(state.items, key = { it.meta.id }) { item ->
                 EmotionEntryCard(
                     item = item,
-                    working = state.workingEntryId == item.meta.id,
-                    onAnalyze = { viewModel.analyzeEntry(item.meta.id) },
                     onOpenEntry = { onOpenEntry(item.meta.id) },
                     onEditEntry = { onEditEntry(item.meta.id) },
                     onOpenEmotionDetail = { onOpenEmotionDetail(item.meta.id) },
@@ -138,8 +128,6 @@ fun EmotionCenterScreen(
 @Composable
 private fun EmotionEntryCard(
     item: EmotionCenterItem,
-    working: Boolean,
-    onAnalyze: () -> Unit,
     onOpenEntry: () -> Unit,
     onEditEntry: () -> Unit,
     onOpenEmotionDetail: () -> Unit,
@@ -175,9 +163,6 @@ private fun EmotionEntryCard(
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onAnalyze, enabled = !working) {
-                    Text(if (working) "分析中..." else "重新分析")
-                }
                 TextButton(onClick = onOpenEmotionDetail) {
                     Text("查看分析")
                 }

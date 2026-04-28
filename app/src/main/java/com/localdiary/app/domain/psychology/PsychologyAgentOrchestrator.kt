@@ -18,8 +18,6 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
-import kotlinx.serialization.SerializationException
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 
 class PsychologyAgentOrchestrator(
@@ -220,16 +218,8 @@ class PsychologyAgentOrchestrator(
         ))
     }
 
-    private inline fun <reified T> decodeJsonOrError(raw: String, label: String): T {
-        val normalized = raw.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
-        return try {
-            json.decodeFromString(normalized)
-        } catch (error: SerializationException) {
-            throw IllegalStateException("${label}返回格式不正确。", error)
-        } catch (error: IllegalArgumentException) {
-            throw IllegalStateException("${label}返回格式不正确。", error)
-        }
-    }
+    private inline fun <reified T> decodeJsonOrError(raw: String, label: String): T =
+        PsychologyJsonExtractor.decodeOrThrow(raw, label)
 }
 
 private fun UserPsychologyProfile.toPromptBlock(): String = buildString {

@@ -7,21 +7,27 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import com.localdiary.app.model.EmotionAnalysis
 import com.localdiary.app.model.PsychologyAgentProcessEvent
 import com.localdiary.app.ui.components.MarkdownText
@@ -41,6 +47,15 @@ fun EmotionDetailScreen(
     onOpenPsychologyChat: (String) -> Unit,
 ) {
     val state = viewModel.uiState
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+
+    fun scrollToAgent(agentId: String) {
+        val eventIndex = state.runtimeEvents.indexOfFirst { it.agentId == agentId }
+        if (eventIndex >= 0) {
+            coroutineScope.launch { listState.animateScrollToItem(3 + eventIndex) }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -79,6 +94,7 @@ fun EmotionDetailScreen(
             state.document != null -> {
                 val document = state.document
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(16.dp),
@@ -104,6 +120,7 @@ fun EmotionDetailScreen(
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                 }
+                                Text("重新分析范围", style = MaterialTheme.typography.titleSmall)
                                 PsychologyAgentSelector(
                                     selectedAgentId = state.selectedAgentId,
                                     onSelect = viewModel::selectAgent,
@@ -133,6 +150,12 @@ fun EmotionDetailScreen(
                     if (state.runtimeEvents.isNotEmpty()) {
                         item("agent-process-title") {
                             Text(if (state.working) "Agent 运行中" else "Agent 过程摘要", style = MaterialTheme.typography.titleMedium)
+                        }
+                        item("agent-process-nav") {
+                            AgentProcessNavigator(
+                                events = state.runtimeEvents,
+                                onSelectAgent = ::scrollToAgent,
+                            )
                         }
                         items(state.runtimeEvents, key = { it.id }) { event ->
                             AgentProcessEventCard(event)
@@ -205,6 +228,31 @@ private fun EmotionAnalysisCard(
             Text(
                 "分析于 ${formatEmotionTimestamp(analysis.createdAt)}",
                 style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AgentProcessNavigator(
+    events: List<PsychologyAgentProcessEvent>,
+    onSelectAgent: (String) -> Unit,
+) {
+    val agents = events
+        .filter { it.agentId != "runtime_result" }
+        .distinctBy { it.agentId }
+    if (agents.isEmpty()) return
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        agents.forEach { event ->
+            FilterChip(
+                selected = false,
+                onClick = { onSelectAgent(event.agentId) },
+                label = { Text(event.agentName.removeSuffix(" Agent")) },
             )
         }
     }
