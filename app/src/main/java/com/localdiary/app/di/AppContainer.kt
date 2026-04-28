@@ -36,6 +36,7 @@ class AppContainer(
             emotionDao = database.emotionAnalysisDao(),
             moodReportDao = database.moodReportDao(),
             versionDao = database.versionSnapshotDao(),
+            chatDao = database.psychologyChatMessageDao(),
             fileStore = fileStore,
             aiSettingsRepository = aiSettingsRepository,
             llmProvider = llmProvider,

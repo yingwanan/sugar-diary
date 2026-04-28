@@ -28,6 +28,7 @@ import com.localdiary.app.ui.screen.EmotionCenterScreen
 import com.localdiary.app.ui.screen.EmotionDetailScreen
 import com.localdiary.app.ui.screen.EmotionReportsScreen
 import com.localdiary.app.ui.screen.EditorScreen
+import com.localdiary.app.ui.screen.PsychologyChatScreen
 import com.localdiary.app.ui.screen.SettingsScreen
 import com.localdiary.app.ui.screen.TimelineScreen
 import com.localdiary.app.ui.screen.ViewerScreen
@@ -36,6 +37,7 @@ import com.localdiary.app.ui.viewmodel.EmotionCenterViewModel
 import com.localdiary.app.ui.viewmodel.EmotionDetailViewModel
 import com.localdiary.app.ui.viewmodel.EmotionReportsViewModel
 import com.localdiary.app.ui.viewmodel.EditorViewModel
+import com.localdiary.app.ui.viewmodel.PsychologyChatViewModel
 import com.localdiary.app.ui.viewmodel.SettingsViewModel
 import com.localdiary.app.ui.viewmodel.TimelineViewModel
 import com.localdiary.app.ui.viewmodel.ViewerViewModel
@@ -49,6 +51,7 @@ private const val EDITOR_ROUTE = "editor"
 private const val VIEWER_ROUTE = "viewer"
 private const val EMOTION_DETAIL_ROUTE = "emotion-detail"
 private const val EMOTION_REPORTS_ROUTE = "emotion-reports"
+private const val PSYCHOLOGY_CHAT_ROUTE = "psychology-chat"
 
 @Composable
 fun DiaryAppRoot(
@@ -94,7 +97,7 @@ fun DiaryAppRoot(
                     listOf(
                         TIMELINE_ROUTE to "时间轴",
                         BROWSER_ROUTE to "浏览",
-                        EMOTION_ROUTE to "情绪",
+                        EMOTION_ROUTE to "心理",
                         SETTINGS_ROUTE to "设置",
                     ).forEach { (route, label) ->
                         val selected = currentDestination?.hierarchy?.any { it.route == route } == true
@@ -106,7 +109,7 @@ fun DiaryAppRoot(
                                     when (route) {
                                         TIMELINE_ROUTE -> "记"
                                         BROWSER_ROUTE -> "览"
-                                        EMOTION_ROUTE -> "绪"
+                                        EMOTION_ROUTE -> "心"
                                         else -> "设"
                                     },
                                 )
@@ -160,6 +163,9 @@ fun DiaryAppRoot(
                         onOpenEmotionDetail = { entryId ->
                             navController.navigate("$EMOTION_DETAIL_ROUTE/$entryId")
                         },
+                        onOpenPsychologyChat = { entryId ->
+                            navController.navigate("$PSYCHOLOGY_CHAT_ROUTE/$entryId")
+                        },
                         onOpenReports = {
                             navController.navigate(EMOTION_REPORTS_ROUTE)
                         },
@@ -189,6 +195,20 @@ fun DiaryAppRoot(
                         onEditEntry = { targetEntryId ->
                             navController.navigate("$EDITOR_ROUTE/$targetEntryId")
                         },
+                        onOpenPsychologyChat = { targetEntryId ->
+                            navController.navigate("$PSYCHOLOGY_CHAT_ROUTE/$targetEntryId")
+                        },
+                    )
+                }
+                composable("$PSYCHOLOGY_CHAT_ROUTE/{entryId}") { entryBackStack ->
+                    val entryId = entryBackStack.arguments?.getString("entryId").orEmpty()
+                    val viewModel: PsychologyChatViewModel = viewModel(
+                        key = "psychology-chat-$entryId",
+                        factory = PsychologyChatViewModel.factory(container.diaryRepository, container.uiMessageManager, entryId),
+                    )
+                    PsychologyChatScreen(
+                        viewModel = viewModel,
+                        onNavigateBack = { navController.popBackStack() },
                     )
                 }
                 composable("$VIEWER_ROUTE/{entryId}") { entryBackStack ->

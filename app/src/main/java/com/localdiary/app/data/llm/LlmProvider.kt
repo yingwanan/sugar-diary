@@ -4,6 +4,8 @@ import com.localdiary.app.model.AiEndpointConfig
 import com.localdiary.app.model.EntryFormat
 import com.localdiary.app.model.PeriodicReportResult
 import com.localdiary.app.model.PolishCandidate
+import com.localdiary.app.model.PsychologyChatMessage
+import com.localdiary.app.model.PsychologyChatResult
 import com.localdiary.app.model.PsychologyAnalysisResult
 import com.localdiary.app.model.ReportPeriod
 import com.localdiary.app.model.ReviewResult
@@ -42,4 +44,11 @@ interface LlmProvider {
         period: ReportPeriod,
         summaries: List<String>,
     ): PeriodicReportResult
+
+    suspend fun chatPsychology(
+        config: AiEndpointConfig,
+        systemPrompt: String,
+        messages: List<PsychologyChatMessage>,
+        userMessage: String,
+    ): PsychologyChatResult
 }

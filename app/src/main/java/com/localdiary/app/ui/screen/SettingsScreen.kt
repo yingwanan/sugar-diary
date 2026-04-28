@@ -130,11 +130,11 @@ fun SettingsScreen(
 
         SettingsSectionCard(
             title = "图片理解模型",
-            description = "当主模型不支持视觉时，用它先解析图片内容，再交给主模型做情绪分析。",
+            description = "当主模型不支持视觉时，用它先解析图片内容，再交给主模型做心理分析。",
         ) {
             ToggleRow(
                 title = "启用独立图片模型",
-                subtitle = "仅在情绪分析时用于图片理解。",
+                subtitle = "仅在心理分析时用于图片理解。",
                 checked = state.imageModelEnabled,
                 onCheckedChange = viewModel::updateImageModelEnabled,
             )
@@ -164,7 +164,7 @@ fun SettingsScreen(
         }
 
         SettingsSectionCard(
-            title = "情绪分析提示词",
+            title = "心理分析提示词",
             description = "保留系统约束，同时允许你定制分析风格。",
             onHeaderClick = viewModel::toggleEmotionPromptExpanded,
             headerAction = {
@@ -178,7 +178,7 @@ fun SettingsScreen(
                 OutlinedTextField(
                     value = state.emotionPromptTemplate,
                     onValueChange = viewModel::updateEmotionPromptTemplate,
-                    label = { Text("情绪分析模板") },
+                    label = { Text("心理分析模板") },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 8,
                 )

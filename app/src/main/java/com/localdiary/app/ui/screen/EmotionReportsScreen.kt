@@ -170,7 +170,7 @@ private fun ReportCard(
         ) {
             Text(report.period.label, style = MaterialTheme.typography.titleMedium)
             Text(report.summary)
-            Text("主导情绪: ${report.dominantMoods.joinToString()}")
+            Text("主导心理: ${report.dominantMoods.joinToString()}")
             report.advice.forEach { advice ->
                 Text("• $advice")
             }

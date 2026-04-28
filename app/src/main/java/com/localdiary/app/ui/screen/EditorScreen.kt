@@ -119,7 +119,7 @@ fun EditorScreen(
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text("删除这篇文章？") },
-            text = { Text("正文、版本快照和情绪分析记录都会一并删除，且无法恢复。") },
+            text = { Text("正文、版本快照和心理分析记录都会一并删除，且无法恢复。") },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteDialog = false
@@ -203,7 +203,7 @@ fun EditorScreen(
         )
 
         ScrollableTabRow(selectedTabIndex = tabIndex) {
-            listOf("编辑", "预览", "AI", "情绪").forEachIndexed { index, label ->
+            listOf("编辑", "预览", "AI", "心理").forEachIndexed { index, label ->
                 Tab(selected = tabIndex == index, onClick = { tabIndex = index }, text = { Text(label) })
             }
         }
@@ -302,8 +302,8 @@ fun EditorScreen(
             ) {
                 item("emotion-banner") {
                     EntryStatusBanner(
-                        title = "当前文章情绪",
-                        detail = "这里保留当前文章的重新分析与摘要查看；完整情绪详情已经拆分为独立页面。",
+                        title = "当前文章心理",
+                        detail = "这里保留当前文章的重新分析与摘要查看；完整心理详情已经拆分为独立页面。",
                         isError = false,
                     )
                 }
@@ -330,7 +330,7 @@ fun EditorScreen(
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 Text("最近一次分析", style = MaterialTheme.typography.titleMedium)
-                                Text("情绪标签: ${analysis.labels.joinToString()}")
+                                Text("心理状态: ${analysis.labels.joinToString()}")
                                 Text("强度: ${analysis.intensity}/100")
                                 Text(analysis.summary)
                                 analysis.suggestions.forEach { suggestion ->
@@ -342,7 +342,7 @@ fun EditorScreen(
                             }
                         }
                     } ?: Card(modifier = Modifier.fillMaxWidth()) {
-                        Text("这篇文章还没有情绪分析记录。", modifier = Modifier.padding(16.dp))
+                        Text("这篇文章还没有心理分析记录。", modifier = Modifier.padding(16.dp))
                     }
                 }
                 item("emotion-center-link") {
@@ -352,10 +352,10 @@ fun EditorScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Text("更多分析", style = MaterialTheme.typography.titleMedium)
-                            Text("周报、月报与全部文章分析都在情绪中心；单篇完整记录可从独立分析页查看。")
+                            Text("周报、月报与全部文章分析都在心理洞察；单篇完整记录可从独立分析页查看。")
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 TextButton(onClick = onOpenEmotionCenter) {
-                                    Text("前往情绪中心")
+                                    Text("前往心理洞察")
                                 }
                                 TextButton(onClick = onOpenEmotionDetail) {
                                     Text("打开分析详情")

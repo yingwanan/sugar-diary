@@ -9,17 +9,20 @@ import com.localdiary.app.data.llm.LlmProvider
 import com.localdiary.app.data.local.dao.EmotionAnalysisDao
 import com.localdiary.app.data.local.dao.EntryDao
 import com.localdiary.app.data.local.dao.MoodReportDao
+import com.localdiary.app.data.local.dao.PsychologyChatMessageDao
 import com.localdiary.app.data.local.dao.StylePresetDao
 import com.localdiary.app.data.local.dao.VersionSnapshotDao
 import com.localdiary.app.data.local.entity.EmotionAnalysisEntity
 import com.localdiary.app.data.local.entity.EntryEntity
 import com.localdiary.app.data.local.entity.MoodReportEntity
+import com.localdiary.app.data.local.entity.PsychologyChatMessageEntity
 import com.localdiary.app.data.local.entity.StylePresetEntity
 import com.localdiary.app.data.local.entity.VersionSnapshotEntity
 import com.localdiary.app.data.settings.AiSettingsRepository
 import com.localdiary.app.data.transfer.TransferManager
 import com.localdiary.app.domain.emotion.EmotionCenterProjector
 import com.localdiary.app.domain.browser.EntryPreviewFormatter
+import com.localdiary.app.domain.psychology.PsychologyAgentContextBuilder
 import com.localdiary.app.domain.report.MoodReportGenerator
 import com.localdiary.app.model.AppStorageSettings
 import com.localdiary.app.model.AiEndpointConfig
@@ -35,6 +38,8 @@ import com.localdiary.app.model.MoodReport
 import com.localdiary.app.model.PeriodicReportResult
 import com.localdiary.app.model.PolishCandidate
 import com.localdiary.app.model.PsychologyAnalysisResult
+import com.localdiary.app.model.PsychologyChatMessage
+import com.localdiary.app.model.PsychologyChatRole
 import com.localdiary.app.model.ReportPeriod
 import com.localdiary.app.model.ReviewResult
 import com.localdiary.app.model.StorageMode
@@ -57,6 +62,7 @@ class DiaryRepository(
     private val emotionDao: EmotionAnalysisDao,
     private val moodReportDao: MoodReportDao,
     private val versionDao: VersionSnapshotDao,
+    private val chatDao: PsychologyChatMessageDao,
     private val fileStore: LocalEntryFileStore,
     private val aiSettingsRepository: AiSettingsRepository,
     private val llmProvider: LlmProvider,
@@ -110,6 +116,57 @@ class DiaryRepository(
 
     fun observeStyles(): Flow<List<StylePreset>> = styleDao.observeAll().map { styles ->
         styles.map(::styleToModel)
+    }
+
+    fun observePsychologyChat(entryId: String): Flow<List<PsychologyChatMessage>> =
+        chatDao.observeForEntry(entryId).map { messages ->
+            messages.map(::chatMessageToModel)
+        }
+
+    suspend fun sendPsychologyChatMessage(entryId: String, message: String): PsychologyChatMessage {
+        val trimmed = message.trim()
+        require(trimmed.isNotBlank()) { "请输入想和心理 Agent 讨论的内容。" }
+        val config = aiSettingsRepository.load()
+        val document = loadDocument(entryId)
+        val latest = latestAnalysis(entryId)
+        val history = emotionDao.getAll()
+            .asSequence()
+            .filterNot { it.entryId == entryId && latest != null && it.id == latest.id }
+            .sortedByDescending { it.createdAt }
+            .map(::analysisToModel)
+            .toList()
+        val context = PsychologyAgentContextBuilder.build(
+            currentTitle = document.meta.title,
+            currentContent = EmbeddedImageParser.sanitizeForLlm(document.content).content,
+            latestAnalysis = latest,
+            historicalAnalyses = history,
+        )
+        val systemPrompt = PsychologyAgentContextBuilder.chatSystemPrompt(context)
+        val previousMessages = chatDao.listForEntry(entryId).map(::chatMessageToModel)
+        val now = System.currentTimeMillis()
+        val userEntity = PsychologyChatMessageEntity(
+            id = UUID.randomUUID().toString(),
+            entryId = entryId,
+            role = PsychologyChatRole.USER.name,
+            content = trimmed,
+            createdAt = now,
+        )
+        chatDao.insert(userEntity)
+        val reply = llmProvider.chatPsychology(
+            config = config,
+            systemPrompt = systemPrompt,
+            messages = previousMessages,
+            userMessage = trimmed,
+        ).reply.trim().ifBlank { "我暂时没有生成有效回复，请稍后重试。" }
+        val assistantEntity = PsychologyChatMessageEntity(
+            id = UUID.randomUUID().toString(),
+            entryId = entryId,
+            role = PsychologyChatRole.ASSISTANT.name,
+            content = reply,
+            createdAt = now + 1,
+        )
+        chatDao.insert(assistantEntity)
+        return chatMessageToModel(assistantEntity)
     }
 
     suspend fun seedBuiltinStyles() {
@@ -237,6 +294,7 @@ class DiaryRepository(
         )
         versionDao.deleteByEntryId(entryId)
         emotionDao.deleteByEntryId(entryId)
+        chatDao.deleteByEntryId(entryId)
         entryDao.deleteById(entryId)
     }
 
@@ -419,6 +477,7 @@ class DiaryRepository(
             analyses = emotionDao.getAll(),
             reports = moodReportDao.getAll(),
             versions = versionDao.getAll(),
+            psychologyChats = chatDao.getAll(),
         )
     }
 
@@ -472,6 +531,14 @@ class DiaryRepository(
             .forEach { report ->
                 moodReportDao.insert(report)
             }
+        imported.manifest.psychologyChats.forEach { chat ->
+            chatDao.insert(
+                chat.copy(
+                    id = UUID.randomUUID().toString(),
+                    entryId = idMapping[chat.entryId] ?: chat.entryId,
+                ),
+            )
+        }
     }
 
     suspend fun exportRaw(resolver: ContentResolver, folderUri: Uri) {
@@ -525,6 +592,20 @@ class DiaryRepository(
         suggestions = json.decodeFromString(entity.suggestionsJson),
         safetyFlag = entity.safetyFlag,
         createdAt = entity.createdAt,
+        triggers = json.decodeFromString(entity.triggersJson),
+        cognitivePatterns = json.decodeFromString(entity.cognitivePatternsJson),
+        needs = json.decodeFromString(entity.needsJson),
+        relationshipSignals = json.decodeFromString(entity.relationshipSignalsJson),
+        defenseMechanisms = json.decodeFromString(entity.defenseMechanismsJson),
+        strengths = json.decodeFromString(entity.strengthsJson),
+    )
+
+    private fun chatMessageToModel(entity: PsychologyChatMessageEntity): PsychologyChatMessage = PsychologyChatMessage(
+        id = entity.id,
+        entryId = entity.entryId,
+        role = runCatching { PsychologyChatRole.valueOf(entity.role) }.getOrDefault(PsychologyChatRole.ASSISTANT),
+        content = entity.content,
+        createdAt = entity.createdAt,
     )
 
     private fun reportToModel(entity: MoodReportEntity): MoodReport? {
@@ -560,6 +641,12 @@ class DiaryRepository(
         suggestionsJson = json.encodeToString(suggestions),
         safetyFlag = safetyFlag,
         createdAt = System.currentTimeMillis(),
+        triggersJson = json.encodeToString(triggers),
+        cognitivePatternsJson = json.encodeToString(cognitivePatterns),
+        needsJson = json.encodeToString(needs),
+        relationshipSignalsJson = json.encodeToString(relationshipSignals),
+        defenseMechanismsJson = json.encodeToString(defenseMechanisms),
+        strengthsJson = json.encodeToString(strengths),
     )
 
     private fun MoodReport.toEntity(): MoodReportEntity = MoodReportEntity(
@@ -578,10 +665,12 @@ class DiaryRepository(
 private fun ReportPeriod.range(now: LocalDate): Pair<Long, Long> {
     val zone = ZoneId.systemDefault()
     val startDate = when (this) {
+        ReportPeriod.DAY -> now
         ReportPeriod.WEEK -> now.with(java.time.DayOfWeek.MONDAY)
         ReportPeriod.MONTH -> now.with(TemporalAdjusters.firstDayOfMonth())
     }
     val endDate = when (this) {
+        ReportPeriod.DAY -> startDate.plusDays(1)
         ReportPeriod.WEEK -> startDate.plusWeeks(1)
         ReportPeriod.MONTH -> startDate.plusMonths(1)
     }
@@ -591,6 +680,7 @@ private fun ReportPeriod.range(now: LocalDate): Pair<Long, Long> {
 }
 
 private fun String.toReportPeriodOrNull(): ReportPeriod? = when (this) {
+    ReportPeriod.DAY.name -> ReportPeriod.DAY
     ReportPeriod.WEEK.name -> ReportPeriod.WEEK
     ReportPeriod.MONTH.name -> ReportPeriod.MONTH
     else -> null

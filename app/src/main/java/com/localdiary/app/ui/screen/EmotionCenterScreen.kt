@@ -35,6 +35,7 @@ fun EmotionCenterScreen(
     onOpenEntry: (String) -> Unit,
     onEditEntry: (String) -> Unit,
     onOpenEmotionDetail: (String) -> Unit,
+    onOpenPsychologyChat: (String) -> Unit,
     onOpenReports: () -> Unit,
 ) {
     val state = viewModel.uiState
@@ -54,8 +55,8 @@ fun EmotionCenterScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         OverviewHeroCard(
-            title = "情绪中心",
-            subtitle = "这里统一查看单篇情绪分析，并进入周报或月报。",
+            title = "心理洞察",
+            subtitle = "这里统一查看单篇心理分析，并进入周报或月报。",
             actions = {
                 TextButton(onClick = onOpenReports) {
                     Text("周期报告")
@@ -85,7 +86,7 @@ fun EmotionCenterScreen(
 
         state.error?.let {
             EmotionStatusBanner(
-                title = "情绪功能失败",
+                title = "心理分析失败",
                 detail = it,
                 isError = true,
             )
@@ -96,13 +97,13 @@ fun EmotionCenterScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item("entry-section-title") {
-                Text("单篇情绪分析", style = MaterialTheme.typography.titleMedium)
+                Text("单篇心理分析", style = MaterialTheme.typography.titleMedium)
             }
 
             if (state.items.isEmpty() && !state.loading) {
                 item("empty-entry-state") {
                     Card(modifier = Modifier.fillMaxWidth()) {
-                        Text("没有符合条件的情绪分析。", modifier = Modifier.padding(16.dp))
+                        Text("没有符合条件的心理分析。", modifier = Modifier.padding(16.dp))
                     }
                 }
             }
@@ -115,6 +116,7 @@ fun EmotionCenterScreen(
                     onOpenEntry = { onOpenEntry(item.meta.id) },
                     onEditEntry = { onEditEntry(item.meta.id) },
                     onOpenEmotionDetail = { onOpenEmotionDetail(item.meta.id) },
+                    onOpenPsychologyChat = { onOpenPsychologyChat(item.meta.id) },
                 )
             }
         }
@@ -129,6 +131,7 @@ private fun EmotionEntryCard(
     onOpenEntry: () -> Unit,
     onEditEntry: () -> Unit,
     onOpenEmotionDetail: () -> Unit,
+    onOpenPsychologyChat: () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -147,10 +150,10 @@ private fun EmotionEntryCard(
             )
             val analysis = item.latestAnalysis
             if (analysis == null) {
-                Text("还没有情绪分析记录。")
+                Text("还没有心理分析记录。")
             } else {
                 Text(
-                    "最近心情: ${analysis.labels.joinToString()}",
+                    "最近状态: ${analysis.labels.joinToString()}",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(
@@ -168,6 +171,9 @@ private fun EmotionEntryCard(
                 }
                 TextButton(onClick = onOpenEmotionDetail) {
                     Text("查看分析")
+                }
+                TextButton(onClick = onOpenPsychologyChat) {
+                    Text("对话")
                 }
                 TextButton(onClick = onOpenEntry) {
                     Text("查看文章")

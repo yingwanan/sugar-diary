@@ -46,7 +46,7 @@ fun ViewerScreen(
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text("删除这篇文章？") },
-            text = { Text("正文、版本快照和情绪分析记录都会一并删除，且无法恢复。") },
+            text = { Text("正文、版本快照和心理分析记录都会一并删除，且无法恢复。") },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteDialog = false
@@ -133,7 +133,7 @@ fun ViewerScreen(
                             }
                             state.latestAnalysis?.let { analysis ->
                                 Text(
-                                    "最近心情: ${analysis.labels.joinToString()} · ${analysis.summary}",
+                                    "最近状态: ${analysis.labels.joinToString()} · ${analysis.summary}",
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
@@ -143,7 +143,7 @@ fun ViewerScreen(
                                     Text("编辑此文章")
                                 }
                                 TextButton(onClick = onOpenEmotionCenter) {
-                                    Text("情绪中心")
+                                    Text("心理洞察")
                                 }
                             }
                         }

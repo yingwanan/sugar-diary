@@ -27,10 +27,10 @@ class MoodReportGenerator {
             .ifEmpty { listOf("保持记录习惯，给自己一点稳定的复盘时间。") }
 
         val summary = if (analyses.isEmpty()) {
-            "这个周期暂无足够的情绪样本。"
+            "这个周期暂无足够的心理样本。"
         } else {
             val dominant = moodCounts.firstOrNull() ?: "平稳"
-            "本周期共分析 ${analyses.size} 篇文本，主导情绪偏向 $dominant，平均强度约为 $averageIntensity/100。"
+            "本周期共分析 ${analyses.size} 篇文本，主导心理偏向 $dominant，平均强度约为 $averageIntensity/100。"
         }
 
         return MoodReport(

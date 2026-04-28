@@ -35,6 +35,7 @@ fun EmotionDetailScreen(
     onNavigateBack: () -> Unit,
     onOpenEntry: (String) -> Unit,
     onEditEntry: (String) -> Unit,
+    onOpenPsychologyChat: (String) -> Unit,
 ) {
     val state = viewModel.uiState
 
@@ -51,7 +52,7 @@ fun EmotionDetailScreen(
             ),
     ) {
         TopAppBar(
-            title = { Text(state.document?.meta?.title ?: "情绪分析") },
+            title = { Text(state.document?.meta?.title ?: "心理分析") },
             navigationIcon = {
                 TextButton(onClick = onNavigateBack) {
                     Text("返回")
@@ -62,7 +63,7 @@ fun EmotionDetailScreen(
         when {
             state.loading -> {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("正在加载情绪分析...")
+                    Text("正在加载心理分析...")
                 }
             }
 
@@ -113,6 +114,9 @@ fun EmotionDetailScreen(
                                     TextButton(onClick = { onEditEntry(document.meta.id) }) {
                                         Text("编辑")
                                     }
+                                    TextButton(onClick = { onOpenPsychologyChat(document.meta.id) }) {
+                                        Text("与心理 Agent 对话")
+                                    }
                                 }
                             }
                         }
@@ -129,7 +133,7 @@ fun EmotionDetailScreen(
                                 title = "当前解读",
                             )
                         } ?: Card(modifier = Modifier.fillMaxWidth()) {
-                            Text("这篇文章还没有情绪分析记录。", modifier = Modifier.padding(16.dp))
+                        Text("这篇文章还没有心理分析记录。", modifier = Modifier.padding(16.dp))
                         }
                     }
 
@@ -164,9 +168,15 @@ private fun EmotionAnalysisCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(title, style = MaterialTheme.typography.titleMedium)
-            Text("情绪标签: ${analysis.labels.joinToString()}")
+            Text("心理状态: ${analysis.labels.joinToString()}")
             Text("强度: ${analysis.intensity}/100")
             Text(analysis.summary)
+            AnalysisSection("触发点", analysis.triggers)
+            AnalysisSection("认知模式", analysis.cognitivePatterns)
+            AnalysisSection("深层需求", analysis.needs)
+            AnalysisSection("关系线索", analysis.relationshipSignals)
+            AnalysisSection("防御/应对", analysis.defenseMechanisms)
+            AnalysisSection("资源优势", analysis.strengths)
             analysis.suggestions.forEach { suggestion ->
                 Text("• $suggestion")
             }
@@ -178,6 +188,13 @@ private fun EmotionAnalysisCard(
                 style = MaterialTheme.typography.bodySmall,
             )
         }
+    }
+}
+
+@Composable
+private fun AnalysisSection(title: String, values: List<String>) {
+    if (values.isNotEmpty()) {
+        Text("$title: ${values.joinToString("；")}")
     }
 }
 

@@ -59,10 +59,10 @@ class EmotionCenterViewModel(
             uiState = uiState.copy(workingEntryId = entryId, error = null)
             runCatching { repository.analyzeEntry(entryId) }
                 .onSuccess {
-                    uiMessageManager.show("情绪分析已更新。")
+                    uiMessageManager.show("心理分析已更新。")
                 }
                 .onFailure { error ->
-                    uiState = uiState.copy(error = error.message ?: "情绪分析失败。")
+                    uiState = uiState.copy(error = error.message ?: "心理分析失败。")
                 }
             uiState = uiState.copy(workingEntryId = null)
         }

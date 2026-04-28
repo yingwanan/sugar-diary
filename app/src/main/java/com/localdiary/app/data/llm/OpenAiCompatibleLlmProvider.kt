@@ -5,6 +5,9 @@ import com.localdiary.app.model.EmotionPromptTemplate
 import com.localdiary.app.model.EntryFormat
 import com.localdiary.app.model.PeriodicReportResult
 import com.localdiary.app.model.PolishCandidate
+import com.localdiary.app.model.PsychologyChatMessage
+import com.localdiary.app.model.PsychologyChatResult
+import com.localdiary.app.model.PsychologyChatRole
 import com.localdiary.app.model.PsychologyAnalysisResult
 import com.localdiary.app.model.ReportPeriod
 import com.localdiary.app.model.ReviewResult
@@ -145,14 +148,14 @@ class OpenAiCompatibleLlmProvider(
             imageDataUrls.isEmpty() -> {
                 completeText(
                     endpoint = config.toMainEndpoint(),
-                    operationLabel = "主模型情绪分析",
+                    operationLabel = "主模型心理分析",
                     systemPrompt = EmotionPromptTemplate.render(
                         template = config.emotionPromptTemplate,
                         entryText = content,
                         format = format,
                         imageContext = imagePlaceholderHint,
                     ),
-                    userPrompt = "请完成当前文章的情绪分析。",
+                    userPrompt = "请完成当前文章的心理分析。",
                 )
             }
 
@@ -165,7 +168,7 @@ class OpenAiCompatibleLlmProvider(
                 )
                 completeText(
                     endpoint = config.toMainEndpoint(),
-                    operationLabel = "主模型情绪分析",
+                    operationLabel = "主模型心理分析",
                     systemPrompt = EmotionPromptTemplate.render(
                         template = config.emotionPromptTemplate,
                         entryText = content,
@@ -174,7 +177,7 @@ class OpenAiCompatibleLlmProvider(
                             .filter { it.isNotBlank() }
                             .joinToString(separator = "\n"),
                     ),
-                    userPrompt = "请基于正文与图片上下文完成情绪分析。",
+                    userPrompt = "请基于正文与图片上下文完成心理分析。",
                 )
             }
 
@@ -187,7 +190,7 @@ class OpenAiCompatibleLlmProvider(
                 )
                 completeText(
                     endpoint = config.toMainEndpoint(),
-                    operationLabel = "主模型情绪分析",
+                    operationLabel = "主模型心理分析",
                     systemPrompt = EmotionPromptTemplate.render(
                         template = config.emotionPromptTemplate,
                         entryText = content,
@@ -196,14 +199,14 @@ class OpenAiCompatibleLlmProvider(
                             .filter { it.isNotBlank() }
                             .joinToString(separator = "\n"),
                     ),
-                    userPrompt = "请基于正文与图片上下文完成情绪分析。",
+                    userPrompt = "请基于正文与图片上下文完成心理分析。",
                 )
             }
 
             else -> {
                 completeText(
                     endpoint = config.toMainEndpoint(),
-                    operationLabel = "主模型情绪分析",
+                    operationLabel = "主模型心理分析",
                     systemPrompt = EmotionPromptTemplate.render(
                         template = config.emotionPromptTemplate,
                         entryText = content,
@@ -213,7 +216,7 @@ class OpenAiCompatibleLlmProvider(
                             "当前文章包含图片，但本次未启用图片理解，仅基于正文分析。",
                         ).filter { it.isNotBlank() }.joinToString(separator = "\n"),
                     ),
-                    userPrompt = "请先基于正文完成情绪分析，并在总结里避免编造未分析到的图片细节。",
+                    userPrompt = "请先基于正文完成心理分析，并在总结里避免编造未分析到的图片细节。",
                 )
             }
         }
@@ -229,13 +232,42 @@ class OpenAiCompatibleLlmProvider(
             endpoint = config.toMainEndpoint(),
             operationLabel = "主模型周期报告",
             systemPrompt = """
-                你是周期情绪报告助手。请基于已有分析摘要生成非医疗建议，返回 JSON:
+                你是周期心理洞察助手。请基于已有心理分析摘要生成非医疗、非诊断的长期模式观察和改善建议，返回 JSON:
                 {"dominantMoods":["..."],"summary":"...","advice":["..."]}
                 周期为 $period。
             """.trimIndent(),
             userPrompt = summaries.joinToString(separator = "\n\n"),
         )
         return json.decodeFromString(payload)
+    }
+
+    override suspend fun chatPsychology(
+        config: AiEndpointConfig,
+        systemPrompt: String,
+        messages: List<PsychologyChatMessage>,
+        userMessage: String,
+    ): PsychologyChatResult {
+        val payload = executeChatCompletion(
+            endpoint = config.toMainEndpoint(),
+            operationLabel = "心理 Agent 对话",
+            messages = buildList {
+                add(buildTextMessage("system", systemPrompt))
+                messages.takeLast(MAX_CHAT_HISTORY_MESSAGES).forEach { message ->
+                    add(
+                        buildTextMessage(
+                            role = when (message.role) {
+                                PsychologyChatRole.USER -> "user"
+                                PsychologyChatRole.ASSISTANT -> "assistant"
+                            },
+                            text = message.content,
+                        ),
+                    )
+                }
+                add(buildTextMessage("user", userMessage))
+            },
+        )
+        return runCatching { json.decodeFromString<PsychologyChatResult>(payload) }
+            .getOrElse { PsychologyChatResult(reply = payload) }
     }
 
     private suspend fun summarizeImages(
@@ -250,9 +282,9 @@ class OpenAiCompatibleLlmProvider(
             systemPrompt = """
                 你是图片理解助手。请仅返回 JSON:
                 {"summary":"..."}
-                需要提炼画面主体、环境线索、人物状态，以及能辅助情绪分析的视觉细节。
+                需要提炼画面主体、环境线索、人物状态，以及能辅助心理分析的视觉细节。
             """.trimIndent(),
-            userPrompt = "请概括这些图片里和情绪分析相关的内容。",
+            userPrompt = "请概括这些图片里和心理分析相关的内容。",
             imageDataUrls = imageDataUrls,
         )
         return json.decodeFromString<ImageSummaryPayload>(payload).summary
@@ -438,6 +470,7 @@ class OpenAiCompatibleLlmProvider(
 
     private companion object {
         const val MAX_ANALYSIS_IMAGES = 2
+        const val MAX_CHAT_HISTORY_MESSAGES = 12
     }
 
     private fun placeholderInstruction(placeholders: List<String>): String {

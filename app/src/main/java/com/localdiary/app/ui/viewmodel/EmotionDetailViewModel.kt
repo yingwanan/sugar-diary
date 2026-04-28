@@ -44,7 +44,7 @@ class EmotionDetailViewModel(
                     uiState = EmotionDetailUiState(
                         loading = false,
                         working = false,
-                        error = error.message ?: "加载情绪分析失败。",
+                        error = error.message ?: "加载心理分析失败。",
                     )
                 }
         }
@@ -58,11 +58,11 @@ class EmotionDetailViewModel(
                 loadState()
             }.onSuccess { state ->
                 uiState = state.copy(working = false)
-                uiMessageManager.show("情绪分析已更新。")
+                uiMessageManager.show("心理分析已更新。")
             }.onFailure { error ->
                 uiState = uiState.copy(
                     working = false,
-                    error = error.message ?: "情绪分析失败。",
+                    error = error.message ?: "心理分析失败。",
                 )
             }
         }

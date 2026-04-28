@@ -54,7 +54,7 @@ fun BrowserScreen(
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
             title = { Text("删除这篇文章？") },
-            text = { Text("《${item.meta.title}》的正文、版本快照和情绪分析记录都会被删除。") },
+            text = { Text("《${item.meta.title}》的正文、版本快照和心理分析记录都会被删除。") },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deleteEntry(item.meta.id)

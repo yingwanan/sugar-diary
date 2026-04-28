@@ -23,7 +23,7 @@ class EmotionPromptTemplateTest {
         )
 
         assertEquals(
-            "情绪分析提示词缺少变量：${AiEndpointConfig.ENTRY_FORMAT_PLACEHOLDER}, ${AiEndpointConfig.IMAGE_CONTEXT_PLACEHOLDER}",
+            "心理分析提示词缺少变量：${AiEndpointConfig.ENTRY_FORMAT_PLACEHOLDER}, ${AiEndpointConfig.IMAGE_CONTEXT_PLACEHOLDER}",
             error,
         )
     }
