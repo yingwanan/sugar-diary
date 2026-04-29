@@ -14,6 +14,17 @@ class EmotionPromptTemplateTest {
     }
 
     @Test
+    fun `default template asks for plain mood labels without scores`() {
+        val template = AiEndpointConfig.DEFAULT_EMOTION_PROMPT_TEMPLATE
+
+        assertTrue(template.contains("简短通俗"))
+        assertTrue(template.contains("不要包含强度"))
+        assertTrue(template.contains("\"labels\":[\"失望\",\"伤心\"]"))
+        assertTrue(!template.contains("(8/10)"))
+        assertTrue(!template.contains("(6/10)"))
+    }
+
+    @Test
     fun `validate rejects template without required placeholders`() {
         val error = EmotionPromptTemplate.validate(
             """
@@ -23,7 +34,7 @@ class EmotionPromptTemplateTest {
         )
 
         assertEquals(
-            "情绪分析提示词缺少变量：${AiEndpointConfig.ENTRY_FORMAT_PLACEHOLDER}, ${AiEndpointConfig.IMAGE_CONTEXT_PLACEHOLDER}",
+            "心理分析提示词缺少变量：${AiEndpointConfig.ENTRY_FORMAT_PLACEHOLDER}, ${AiEndpointConfig.IMAGE_CONTEXT_PLACEHOLDER}",
             error,
         )
     }

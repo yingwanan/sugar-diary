@@ -5,6 +5,9 @@ import com.localdiary.app.model.EmotionPromptTemplate
 import com.localdiary.app.model.EntryFormat
 import com.localdiary.app.model.PeriodicReportResult
 import com.localdiary.app.model.PolishCandidate
+import com.localdiary.app.model.PsychologyChatMessage
+import com.localdiary.app.model.PsychologyChatResult
+import com.localdiary.app.model.PsychologyChatRole
 import com.localdiary.app.model.PsychologyAnalysisResult
 import com.localdiary.app.model.ReportPeriod
 import com.localdiary.app.model.ReviewResult
@@ -14,6 +17,9 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
@@ -145,14 +151,14 @@ class OpenAiCompatibleLlmProvider(
             imageDataUrls.isEmpty() -> {
                 completeText(
                     endpoint = config.toMainEndpoint(),
-                    operationLabel = "主模型情绪分析",
+                    operationLabel = "主模型心理分析",
                     systemPrompt = EmotionPromptTemplate.render(
                         template = config.emotionPromptTemplate,
                         entryText = content,
                         format = format,
                         imageContext = imagePlaceholderHint,
                     ),
-                    userPrompt = "请完成当前文章的情绪分析。",
+                    userPrompt = "请完成当前文章的心理分析。",
                 )
             }
 
@@ -165,7 +171,7 @@ class OpenAiCompatibleLlmProvider(
                 )
                 completeText(
                     endpoint = config.toMainEndpoint(),
-                    operationLabel = "主模型情绪分析",
+                    operationLabel = "主模型心理分析",
                     systemPrompt = EmotionPromptTemplate.render(
                         template = config.emotionPromptTemplate,
                         entryText = content,
@@ -174,7 +180,7 @@ class OpenAiCompatibleLlmProvider(
                             .filter { it.isNotBlank() }
                             .joinToString(separator = "\n"),
                     ),
-                    userPrompt = "请基于正文与图片上下文完成情绪分析。",
+                    userPrompt = "请基于正文与图片上下文完成心理分析。",
                 )
             }
 
@@ -187,7 +193,7 @@ class OpenAiCompatibleLlmProvider(
                 )
                 completeText(
                     endpoint = config.toMainEndpoint(),
-                    operationLabel = "主模型情绪分析",
+                    operationLabel = "主模型心理分析",
                     systemPrompt = EmotionPromptTemplate.render(
                         template = config.emotionPromptTemplate,
                         entryText = content,
@@ -196,14 +202,14 @@ class OpenAiCompatibleLlmProvider(
                             .filter { it.isNotBlank() }
                             .joinToString(separator = "\n"),
                     ),
-                    userPrompt = "请基于正文与图片上下文完成情绪分析。",
+                    userPrompt = "请基于正文与图片上下文完成心理分析。",
                 )
             }
 
             else -> {
                 completeText(
                     endpoint = config.toMainEndpoint(),
-                    operationLabel = "主模型情绪分析",
+                    operationLabel = "主模型心理分析",
                     systemPrompt = EmotionPromptTemplate.render(
                         template = config.emotionPromptTemplate,
                         entryText = content,
@@ -213,7 +219,7 @@ class OpenAiCompatibleLlmProvider(
                             "当前文章包含图片，但本次未启用图片理解，仅基于正文分析。",
                         ).filter { it.isNotBlank() }.joinToString(separator = "\n"),
                     ),
-                    userPrompt = "请先基于正文完成情绪分析，并在总结里避免编造未分析到的图片细节。",
+                    userPrompt = "请先基于正文完成心理分析，并在总结里避免编造未分析到的图片细节。",
                 )
             }
         }
@@ -229,7 +235,7 @@ class OpenAiCompatibleLlmProvider(
             endpoint = config.toMainEndpoint(),
             operationLabel = "主模型周期报告",
             systemPrompt = """
-                你是周期情绪报告助手。请基于已有分析摘要生成非医疗建议，返回 JSON:
+                你是周期心理洞察助手。请基于已有心理分析摘要生成非医疗、非诊断的长期模式观察和改善建议，返回 JSON:
                 {"dominantMoods":["..."],"summary":"...","advice":["..."]}
                 周期为 $period。
             """.trimIndent(),
@@ -237,6 +243,61 @@ class OpenAiCompatibleLlmProvider(
         )
         return json.decodeFromString(payload)
     }
+
+    override suspend fun chatPsychology(
+        config: AiEndpointConfig,
+        systemPrompt: String,
+        messages: List<PsychologyChatMessage>,
+        userMessage: String,
+    ): PsychologyChatResult {
+        val payload = executeChatCompletion(
+            endpoint = config.toMainEndpoint(),
+            operationLabel = "心理 Agent 对话",
+            messages = buildList {
+                add(buildTextMessage("system", systemPrompt))
+                messages.takeLast(MAX_CHAT_HISTORY_MESSAGES).forEach { message ->
+                    add(
+                        buildTextMessage(
+                            role = when (message.role) {
+                                PsychologyChatRole.USER -> "user"
+                                PsychologyChatRole.ASSISTANT -> "assistant"
+                            },
+                            text = message.content,
+                        ),
+                    )
+                }
+                add(buildTextMessage("user", userMessage))
+            },
+        )
+        return runCatching { json.decodeFromString<PsychologyChatResult>(payload) }
+            .getOrElse { PsychologyChatResult(reply = payload) }
+    }
+
+
+
+    override suspend fun completePsychologyText(
+        config: AiEndpointConfig,
+        systemPrompt: String,
+        userPrompt: String,
+    ): String = completeText(
+        endpoint = config.toMainEndpoint(),
+        operationLabel = "心理 Agent",
+        systemPrompt = systemPrompt,
+        userPrompt = userPrompt,
+    )
+
+    override fun streamPsychologyText(
+        config: AiEndpointConfig,
+        systemPrompt: String,
+        userPrompt: String,
+    ): Flow<String> = executeStreamingChatCompletion(
+        endpoint = config.toMainEndpoint(),
+        operationLabel = "心理 Agent 流式回复",
+        messages = listOf(
+            buildTextMessage("system", systemPrompt),
+            buildTextMessage("user", userPrompt),
+        ),
+    )
 
     private suspend fun summarizeImages(
         config: AiEndpointConfig,
@@ -250,9 +311,9 @@ class OpenAiCompatibleLlmProvider(
             systemPrompt = """
                 你是图片理解助手。请仅返回 JSON:
                 {"summary":"..."}
-                需要提炼画面主体、环境线索、人物状态，以及能辅助情绪分析的视觉细节。
+                需要提炼画面主体、环境线索、人物状态，以及能辅助心理分析的视觉细节。
             """.trimIndent(),
-            userPrompt = "请概括这些图片里和情绪分析相关的内容。",
+            userPrompt = "请概括这些图片里和心理分析相关的内容。",
             imageDataUrls = imageDataUrls,
         )
         return json.decodeFromString<ImageSummaryPayload>(payload).summary
@@ -338,6 +399,64 @@ class OpenAiCompatibleLlmProvider(
             error("${operationLabel}失败：${error.message ?: "network error"}")
         }
     }
+
+
+
+    private fun executeStreamingChatCompletion(
+        endpoint: ResolvedEndpoint,
+        operationLabel: String,
+        messages: List<JsonObject>,
+    ): Flow<String> = flow {
+        val client = OkHttpClient.Builder()
+            .connectTimeout(endpoint.requestTimeoutSeconds.toLong(), TimeUnit.SECONDS)
+            .readTimeout(endpoint.requestTimeoutSeconds.toLong(), TimeUnit.SECONDS)
+            .writeTimeout(endpoint.requestTimeoutSeconds.toLong(), TimeUnit.SECONDS)
+            .callTimeout(endpoint.requestTimeoutSeconds.toLong(), TimeUnit.SECONDS)
+            .build()
+
+        val body = json.encodeToString(
+            JsonObject.serializer(),
+            buildJsonObject {
+                put("model", JsonPrimitive(endpoint.model))
+                put("messages", JsonArray(messages))
+                put("temperature", JsonPrimitive(0.3))
+                put("stream", JsonPrimitive(true))
+            },
+        )
+
+        val request = Request.Builder()
+            .url(endpoint.url)
+            .header("Authorization", "Bearer ${endpoint.apiKey}")
+            .header("Accept", "text/event-stream")
+            .header("Content-Type", "application/json")
+            .post(body.toRequestBody("application/json".toMediaType()))
+            .build()
+
+        try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    val errorDetail = response.body?.string().orEmpty().take(200).ifBlank { "No response body" }
+                    error("${operationLabel}失败 (${response.code}): $errorDetail")
+                }
+                val source = response.body?.source() ?: error("${operationLabel}失败：空响应。")
+                while (!source.exhausted()) {
+                    val line = source.readUtf8Line() ?: break
+                    if (!line.startsWith("data:")) continue
+                    val data = line.removePrefix("data:").trim()
+                    if (data == "[DONE]") break
+                    OpenAiStreamParser.parseDataLine(data)?.let { emit(it) }
+                }
+            }
+        } catch (error: UnknownHostException) {
+            error("${operationLabel}失败：无法解析 API 域名，请检查接口地址。")
+        } catch (error: SocketTimeoutException) {
+            error("${operationLabel}超时。请检查网络或提高超时秒数。")
+        } catch (error: SerializationException) {
+            error("${operationLabel}失败：API 返回了不受支持的数据格式。")
+        } catch (error: IOException) {
+            error("${operationLabel}失败：${error.message ?: "network error"}")
+        }
+    }.flowOn(Dispatchers.IO)
 
     private fun extractResponseContent(responseBody: String): String {
         val normalizedBody = responseBody
@@ -438,6 +557,7 @@ class OpenAiCompatibleLlmProvider(
 
     private companion object {
         const val MAX_ANALYSIS_IMAGES = 2
+        const val MAX_CHAT_HISTORY_MESSAGES = 12
     }
 
     private fun placeholderInstruction(placeholders: List<String>): String {

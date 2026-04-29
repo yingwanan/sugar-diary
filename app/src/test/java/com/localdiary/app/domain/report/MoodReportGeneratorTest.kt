@@ -52,6 +52,8 @@ class MoodReportGeneratorTest {
         assertEquals(listOf("焦虑", "疲惫", "平静"), report.dominantMoods)
         assertEquals(63, report.averageIntensity)
         assertTrue(report.summary.contains("3 篇"))
+        assertTrue(!report.summary.contains("强度"))
+        assertTrue(!report.summary.contains("/100"))
         assertEquals(3, report.advice.size)
     }
 

@@ -15,4 +15,12 @@ data class EmotionAnalysisEntity(
     val suggestionsJson: String,
     val safetyFlag: Boolean,
     val createdAt: Long,
+    val triggersJson: String = "[]",
+    val cognitivePatternsJson: String = "[]",
+    val needsJson: String = "[]",
+    val relationshipSignalsJson: String = "[]",
+    val defenseMechanismsJson: String = "[]",
+    val strengthsJson: String = "[]",
+    val bodyStressSignalsJson: String = "[]",
+    val riskNotesJson: String = "[]",
 )

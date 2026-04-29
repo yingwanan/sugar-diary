@@ -15,7 +15,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,6 +25,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.localdiary.app.ui.components.ArticlePreview
+import com.localdiary.app.ui.designsystem.molecule.AppLoadingState
+import com.localdiary.app.ui.designsystem.organism.AppTopBar
 import com.localdiary.app.ui.viewmodel.ViewerViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -46,7 +47,7 @@ fun ViewerScreen(
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text("删除这篇文章？") },
-            text = { Text("正文、版本快照和情绪分析记录都会一并删除，且无法恢复。") },
+            text = { Text("正文、版本快照和心理分析记录都会一并删除，且无法恢复。") },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteDialog = false
@@ -75,13 +76,9 @@ fun ViewerScreen(
                 ),
             ),
     ) {
-        TopAppBar(
-            title = { Text(state.document?.meta?.title ?: "查看文章") },
-            navigationIcon = {
-                TextButton(onClick = onNavigateBack) {
-                    Text("返回")
-                }
-            },
+        AppTopBar(
+            title = state.document?.meta?.title ?: "查看文章",
+            onNavigateBack = onNavigateBack,
             actions = {
                 state.document?.let { document ->
                     TextButton(onClick = { showDeleteDialog = true }) {
@@ -96,9 +93,7 @@ fun ViewerScreen(
 
         when {
             state.loading -> {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("正在加载文章...")
-                }
+                AppLoadingState(message = "正在加载文章...", modifier = Modifier.fillMaxSize())
             }
 
             state.error != null -> {
@@ -133,7 +128,7 @@ fun ViewerScreen(
                             }
                             state.latestAnalysis?.let { analysis ->
                                 Text(
-                                    "最近心情: ${analysis.labels.joinToString()} · ${analysis.summary}",
+                                    "最近状态: ${analysis.labels.joinToString()} · ${analysis.summary}",
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
@@ -143,7 +138,7 @@ fun ViewerScreen(
                                     Text("编辑此文章")
                                 }
                                 TextButton(onClick = onOpenEmotionCenter) {
-                                    Text("情绪中心")
+                                    Text("心理洞察")
                                 }
                             }
                         }

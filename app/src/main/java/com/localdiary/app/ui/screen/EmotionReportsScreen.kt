@@ -16,14 +16,15 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import com.localdiary.app.model.MoodReport
+import com.localdiary.app.ui.components.MarkdownText
 import com.localdiary.app.model.ReportPeriod
 import com.localdiary.app.model.label
+import com.localdiary.app.ui.designsystem.organism.AppTopBar
 import com.localdiary.app.ui.viewmodel.EmotionReportsViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -49,13 +50,9 @@ fun EmotionReportsScreen(
                 ),
             ),
     ) {
-        TopAppBar(
-            title = { Text("周期报告") },
-            navigationIcon = {
-                TextButton(onClick = onNavigateBack) {
-                    Text("返回")
-                }
-            },
+        AppTopBar(
+            title = "周期报告",
+            onNavigateBack = onNavigateBack,
         )
 
         LazyColumn(
@@ -169,10 +166,10 @@ private fun ReportCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(report.period.label, style = MaterialTheme.typography.titleMedium)
-            Text(report.summary)
-            Text("主导情绪: ${report.dominantMoods.joinToString()}")
+            MarkdownText(report.summary)
+            Text("常见心情: ${report.dominantMoods.joinToString()}")
             report.advice.forEach { advice ->
-                Text("• $advice")
+                MarkdownText("• $advice")
             }
             Text(
                 "生成于 ${formatReportTimestamp(report.createdAt)}",

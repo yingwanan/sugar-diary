@@ -334,7 +334,7 @@ class EditorViewModel(
                 .onSuccess { analysis ->
                     uiState = uiState.copy(
                         latestAnalysis = analysis,
-                        infoMessage = "情绪分析已更新。",
+                        infoMessage = "心理分析已更新。",
                     )
                 }
                 .onFailure { error ->

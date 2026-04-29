@@ -18,7 +18,6 @@ data class EmotionCenterUiState(
     val query: String = "",
     val isSearchExpanded: Boolean = false,
     val items: List<EmotionCenterItem> = emptyList(),
-    val workingEntryId: String? = null,
     val error: String? = null,
 )
 
@@ -52,20 +51,6 @@ class EmotionCenterViewModel(
             query = if (expanded) uiState.query else "",
         )
         rebuildState()
-    }
-
-    fun analyzeEntry(entryId: String) {
-        viewModelScope.launch {
-            uiState = uiState.copy(workingEntryId = entryId, error = null)
-            runCatching { repository.analyzeEntry(entryId) }
-                .onSuccess {
-                    uiMessageManager.show("情绪分析已更新。")
-                }
-                .onFailure { error ->
-                    uiState = uiState.copy(error = error.message ?: "情绪分析失败。")
-                }
-            uiState = uiState.copy(workingEntryId = null)
-        }
     }
 
     private fun rebuildState() {

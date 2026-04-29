@@ -5,7 +5,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,6 +34,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -71,7 +71,7 @@ fun EditorScreen(
     val state = viewModel.uiState
     val context = LocalContext.current
     val resolver = context.contentResolver
-    var tabIndex by remember { mutableStateOf(0) }
+    var tabIndex by remember { mutableIntStateOf(0) }
     var confirmAction by remember { mutableStateOf<String?>(null) }
     var pendingStyle by remember { mutableStateOf<StylePreset?>(null) }
     var showDiscardDialog by remember { mutableStateOf(false) }
@@ -119,7 +119,7 @@ fun EditorScreen(
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text("删除这篇文章？") },
-            text = { Text("正文、版本快照和情绪分析记录都会一并删除，且无法恢复。") },
+            text = { Text("正文、版本快照和心理分析记录都会一并删除，且无法恢复。") },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteDialog = false
@@ -193,17 +193,23 @@ fun EditorScreen(
                 }
             },
             actions = {
-                TextButton(onClick = { showDeleteDialog = true }) {
+                TextButton(
+                    onClick = { showDeleteDialog = true },
+                    enabled = !state.working,
+                ) {
                     Text("删除")
                 }
-                TextButton(onClick = viewModel::save) {
-                    Text("保存")
+                TextButton(
+                    onClick = viewModel::save,
+                    enabled = !state.working,
+                ) {
+                    Text(if (state.working) "处理中" else "保存")
                 }
             },
         )
 
         ScrollableTabRow(selectedTabIndex = tabIndex) {
-            listOf("编辑", "预览", "AI", "情绪").forEachIndexed { index, label ->
+            listOf("编辑", "预览", "AI", "心理").forEachIndexed { index, label ->
                 Tab(selected = tabIndex == index, onClick = { tabIndex = index }, text = { Text(label) })
             }
         }
@@ -257,7 +263,7 @@ fun EditorScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = { confirmAction = "review" },
-                        enabled = state.reviewTargetFormat != state.format,
+                        enabled = !state.working && state.reviewTargetFormat != state.format,
                     ) {
                         Text("生成格式转换稿")
                     }
@@ -287,6 +293,7 @@ fun EditorScreen(
                         items(state.styles, key = { it.id }) { preset ->
                             StylePresetCard(
                                 preset = preset,
+                                enabled = !state.working,
                                 onApply = { pendingStyle = preset },
                             )
                         }
@@ -302,8 +309,8 @@ fun EditorScreen(
             ) {
                 item("emotion-banner") {
                     EntryStatusBanner(
-                        title = "当前文章情绪",
-                        detail = "这里保留当前文章的重新分析与摘要查看；完整情绪详情已经拆分为独立页面。",
+                        title = "当前文章心理",
+                        detail = "这里保留当前文章的重新分析与摘要查看；完整心理详情已经拆分为独立页面。",
                         isError = false,
                     )
                 }
@@ -314,8 +321,11 @@ fun EditorScreen(
                 }
                 item("emotion-actions") {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { confirmAction = "analysis" }) {
-                            Text("重新分析当前文章")
+                        Button(
+                            onClick = { confirmAction = "analysis" },
+                            enabled = !state.working,
+                        ) {
+                            Text(if (state.working) "分析中..." else "重新分析当前文章")
                         }
                         TextButton(onClick = onOpenEmotionDetail) {
                             Text("查看完整分析")
@@ -330,8 +340,7 @@ fun EditorScreen(
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 Text("最近一次分析", style = MaterialTheme.typography.titleMedium)
-                                Text("情绪标签: ${analysis.labels.joinToString()}")
-                                Text("强度: ${analysis.intensity}/100")
+                                Text("心情: ${analysis.labels.joinToString()}")
                                 Text(analysis.summary)
                                 analysis.suggestions.forEach { suggestion ->
                                     Text("• $suggestion")
@@ -342,7 +351,7 @@ fun EditorScreen(
                             }
                         }
                     } ?: Card(modifier = Modifier.fillMaxWidth()) {
-                        Text("这篇文章还没有情绪分析记录。", modifier = Modifier.padding(16.dp))
+                        Text("这篇文章还没有心理分析记录。", modifier = Modifier.padding(16.dp))
                     }
                 }
                 item("emotion-center-link") {
@@ -352,10 +361,10 @@ fun EditorScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Text("更多分析", style = MaterialTheme.typography.titleMedium)
-                            Text("周报、月报与全部文章分析都在情绪中心；单篇完整记录可从独立分析页查看。")
+                            Text("周报、月报与全部文章分析都在心理洞察；单篇完整记录可从独立分析页查看。")
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 TextButton(onClick = onOpenEmotionCenter) {
-                                    Text("前往情绪中心")
+                                    Text("前往心理洞察")
                                 }
                                 TextButton(onClick = onOpenEmotionDetail) {
                                     Text("打开分析详情")
@@ -426,7 +435,8 @@ private fun EditorTab(
                     OutlinedTextField(
                         value = state.tagsInput,
                         onValueChange = onTagsChange,
-                        label = { Text("标签，逗号分隔") },
+                        label = { Text("标签，英文逗号分隔") },
+                        placeholder = { Text("生活,工作,旅行") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                     )
@@ -454,7 +464,10 @@ private fun EditorTab(
                                 Text("标题与标签")
                             }
                         }
-                        Button(onClick = onInsertImage) {
+                        Button(
+                            onClick = onInsertImage,
+                            enabled = !state.working,
+                        ) {
                             Text("插入图片")
                         }
                     }
@@ -537,9 +550,7 @@ private fun MetaSummaryCard(
     onExpand: () -> Unit,
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onExpand),
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Row(
@@ -568,13 +579,14 @@ private fun MetaSummaryCard(
 @Composable
 private fun StylePresetCard(
     preset: StylePreset,
+    enabled: Boolean = true,
     onApply: () -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(preset.name, style = MaterialTheme.typography.titleMedium)
             Text(preset.prompt)
-            TextButton(onClick = onApply) {
+            TextButton(onClick = onApply, enabled = enabled) {
                 Text("发送到 LLM 润色")
             }
         }
@@ -666,8 +678,8 @@ private fun EntryStatusBanner(
 }
 
 private fun formatBytes(bytes: Int): String = when {
-    bytes >= 1024 * 1024 -> String.format("%.1f MB", bytes / 1024f / 1024f)
-    bytes >= 1024 -> String.format("%.0f KB", bytes / 1024f)
+    bytes >= 1024 * 1024 -> String.format(Locale.getDefault(), "%.1f MB", bytes / 1024f / 1024f)
+    bytes >= 1024 -> String.format(Locale.getDefault(), "%.0f KB", bytes / 1024f)
     else -> "$bytes B"
 }
 

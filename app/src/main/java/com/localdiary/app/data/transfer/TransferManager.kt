@@ -8,6 +8,10 @@ import com.localdiary.app.data.file.LocalEntryFileStore
 import com.localdiary.app.data.local.entity.EmotionAnalysisEntity
 import com.localdiary.app.data.local.entity.EntryEntity
 import com.localdiary.app.data.local.entity.MoodReportEntity
+import com.localdiary.app.data.local.entity.PsychologyChatMessageEntity
+import com.localdiary.app.data.local.entity.UserPsychologyProfileEntity
+import com.localdiary.app.data.local.entity.PsychologyAgentProcessEventEntity
+import com.localdiary.app.data.local.entity.PsychologyAnalysisRunEntity
 import com.localdiary.app.data.local.entity.StylePresetEntity
 import com.localdiary.app.data.local.entity.VersionSnapshotEntity
 import com.localdiary.app.model.EntryFormat
@@ -33,6 +37,10 @@ class TransferManager(
         analyses: List<EmotionAnalysisEntity>,
         reports: List<MoodReportEntity>,
         versions: List<VersionSnapshotEntity>,
+        psychologyChats: List<PsychologyChatMessageEntity>,
+        psychologyRuns: List<PsychologyAnalysisRunEntity>,
+        psychologyEvents: List<PsychologyAgentProcessEventEntity>,
+        userProfiles: List<UserPsychologyProfileEntity>,
     ) = withContext(Dispatchers.IO) {
         resolver.openOutputStream(uri)?.use { stream ->
             ZipOutputStream(stream).use { zip ->
@@ -52,6 +60,10 @@ class TransferManager(
                     styles = styles,
                     analyses = analyses,
                     reports = reports,
+                    psychologyChats = psychologyChats,
+                    psychologyRuns = psychologyRuns,
+                    psychologyEvents = psychologyEvents,
+                    userProfiles = userProfiles,
                     versions = versions.map {
                         val format = EntryFormat.valueOf(it.format)
                         BundleVersion(
@@ -169,6 +181,10 @@ data class BundleManifest(
     val analyses: List<EmotionAnalysisEntity>,
     val reports: List<MoodReportEntity>,
     val versions: List<BundleVersion>,
+    val psychologyChats: List<PsychologyChatMessageEntity> = emptyList(),
+    val psychologyRuns: List<PsychologyAnalysisRunEntity> = emptyList(),
+    val psychologyEvents: List<PsychologyAgentProcessEventEntity> = emptyList(),
+    val userProfiles: List<UserPsychologyProfileEntity> = emptyList(),
 )
 
 @Serializable

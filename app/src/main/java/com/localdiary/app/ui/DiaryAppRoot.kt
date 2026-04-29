@@ -2,12 +2,18 @@ package com.localdiary.app.ui
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Psychology
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -23,11 +29,16 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.localdiary.app.di.AppContainer
+import com.localdiary.app.ui.designsystem.organism.AppBottomBar
+import com.localdiary.app.ui.designsystem.organism.BottomBarItem
+import com.localdiary.app.ui.navigation.DiaryRoutes
 import com.localdiary.app.ui.screen.BrowserScreen
 import com.localdiary.app.ui.screen.EmotionCenterScreen
 import com.localdiary.app.ui.screen.EmotionDetailScreen
 import com.localdiary.app.ui.screen.EmotionReportsScreen
 import com.localdiary.app.ui.screen.EditorScreen
+import com.localdiary.app.ui.screen.PsychologyChatScreen
+import com.localdiary.app.ui.screen.PsychologyProfileScreen
 import com.localdiary.app.ui.screen.SettingsScreen
 import com.localdiary.app.ui.screen.TimelineScreen
 import com.localdiary.app.ui.screen.ViewerScreen
@@ -36,19 +47,12 @@ import com.localdiary.app.ui.viewmodel.EmotionCenterViewModel
 import com.localdiary.app.ui.viewmodel.EmotionDetailViewModel
 import com.localdiary.app.ui.viewmodel.EmotionReportsViewModel
 import com.localdiary.app.ui.viewmodel.EditorViewModel
+import com.localdiary.app.ui.viewmodel.PsychologyChatViewModel
+import com.localdiary.app.ui.viewmodel.PsychologyProfileViewModel
 import com.localdiary.app.ui.viewmodel.SettingsViewModel
 import com.localdiary.app.ui.viewmodel.TimelineViewModel
 import com.localdiary.app.ui.viewmodel.ViewerViewModel
 import kotlinx.coroutines.flow.collectLatest
-
-private const val TIMELINE_ROUTE = "timeline"
-private const val BROWSER_ROUTE = "browser"
-private const val EMOTION_ROUTE = "emotion"
-private const val SETTINGS_ROUTE = "settings"
-private const val EDITOR_ROUTE = "editor"
-private const val VIEWER_ROUTE = "viewer"
-private const val EMOTION_DETAIL_ROUTE = "emotion-detail"
-private const val EMOTION_REPORTS_ROUTE = "emotion-reports"
 
 @Composable
 fun DiaryAppRoot(
@@ -58,7 +62,37 @@ fun DiaryAppRoot(
     val snackbarHostState = remember { SnackbarHostState() }
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
-    val topLevelRoutes = listOf(TIMELINE_ROUTE, BROWSER_ROUTE, EMOTION_ROUTE, SETTINGS_ROUTE)
+    val bottomBarItems = remember {
+        listOf(
+            BottomBarItem(
+                route = DiaryRoutes.TIMELINE,
+                label = "时间轴",
+                icon = Icons.AutoMirrored.Outlined.MenuBook,
+                selectedIcon = Icons.AutoMirrored.Filled.MenuBook,
+            ),
+            BottomBarItem(
+                route = DiaryRoutes.BROWSER,
+                label = "浏览",
+                icon = Icons.Outlined.Search,
+                selectedIcon = Icons.Filled.Search,
+            ),
+            BottomBarItem(
+                route = DiaryRoutes.EMOTION,
+                label = "心理",
+                icon = Icons.Outlined.Psychology,
+                selectedIcon = Icons.Filled.Psychology,
+            ),
+            BottomBarItem(
+                route = DiaryRoutes.SETTINGS,
+                label = "设置",
+                icon = Icons.Outlined.Settings,
+                selectedIcon = Icons.Filled.Settings,
+            ),
+        )
+    }
+    val selectedTopLevelRoute = DiaryRoutes.topLevelRoutes.firstOrNull { route ->
+        currentDestination?.hierarchy?.any { it.route == route } == true
+    }
 
     LaunchedEffect(container.uiMessageManager) {
         container.uiMessageManager.messages.collectLatest { event ->
@@ -89,83 +123,78 @@ fun DiaryAppRoot(
 
     Scaffold(
         bottomBar = {
-            if (currentDestination?.route in topLevelRoutes) {
-                NavigationBar {
-                    listOf(
-                        TIMELINE_ROUTE to "时间轴",
-                        BROWSER_ROUTE to "浏览",
-                        EMOTION_ROUTE to "情绪",
-                        SETTINGS_ROUTE to "设置",
-                    ).forEach { (route, label) ->
-                        val selected = currentDestination?.hierarchy?.any { it.route == route } == true
-                        NavigationBarItem(
-                            selected = selected,
-                            onClick = { navigateToTopLevel(route) },
-                            icon = {
-                                Text(
-                                    when (route) {
-                                        TIMELINE_ROUTE -> "记"
-                                        BROWSER_ROUTE -> "览"
-                                        EMOTION_ROUTE -> "绪"
-                                        else -> "设"
-                                    },
-                                )
-                            },
-                            label = { Text(label) },
-                        )
-                    }
-                }
+            if (selectedTopLevelRoute != null) {
+                AppBottomBar(
+                    selectedRoute = selectedTopLevelRoute,
+                    onNavigate = ::navigateToTopLevel,
+                    items = bottomBarItems,
+                )
             }
         },
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
             NavHost(
                 navController = navController,
-                startDestination = TIMELINE_ROUTE,
+                startDestination = DiaryRoutes.TIMELINE,
             ) {
-                composable(TIMELINE_ROUTE) {
+                composable(DiaryRoutes.TIMELINE) {
                     val viewModel: TimelineViewModel = viewModel(
                         factory = TimelineViewModel.factory(container.diaryRepository, container.uiMessageManager),
                     )
                     TimelineScreen(
                         viewModel = viewModel,
                         onOpenEntry = { entryId ->
-                            navController.navigate("$EDITOR_ROUTE/$entryId")
+                            navController.navigate(DiaryRoutes.editor(entryId))
                         },
                     )
                 }
-                composable(BROWSER_ROUTE) {
+                composable(DiaryRoutes.BROWSER) {
                     val viewModel: BrowserViewModel = viewModel(
                         factory = BrowserViewModel.factory(container.diaryRepository, container.uiMessageManager),
                     )
                     BrowserScreen(
                         viewModel = viewModel,
                         onOpenEntry = { entryId ->
-                            navController.navigate("$VIEWER_ROUTE/$entryId")
+                            navController.navigate(DiaryRoutes.viewer(entryId))
                         },
                     )
                 }
-                composable(EMOTION_ROUTE) {
+                composable(DiaryRoutes.EMOTION) {
                     val viewModel: EmotionCenterViewModel = viewModel(
                         factory = EmotionCenterViewModel.factory(container.diaryRepository, container.uiMessageManager),
                     )
                     EmotionCenterScreen(
                         viewModel = viewModel,
                         onOpenEntry = { entryId ->
-                            navController.navigate("$VIEWER_ROUTE/$entryId")
+                            navController.navigate(DiaryRoutes.viewer(entryId))
                         },
                         onEditEntry = { entryId ->
-                            navController.navigate("$EDITOR_ROUTE/$entryId")
+                            navController.navigate(DiaryRoutes.editor(entryId))
                         },
                         onOpenEmotionDetail = { entryId ->
-                            navController.navigate("$EMOTION_DETAIL_ROUTE/$entryId")
+                            navController.navigate(DiaryRoutes.emotionDetail(entryId))
+                        },
+                        onOpenPsychologyChat = { entryId ->
+                            navController.navigate(DiaryRoutes.psychologyChat(entryId))
                         },
                         onOpenReports = {
-                            navController.navigate(EMOTION_REPORTS_ROUTE)
+                            navController.navigate(DiaryRoutes.EMOTION_REPORTS)
+                        },
+                        onOpenProfile = {
+                            navController.navigate(DiaryRoutes.PSYCHOLOGY_PROFILE)
                         },
                     )
                 }
-                composable(EMOTION_REPORTS_ROUTE) {
+                composable(DiaryRoutes.PSYCHOLOGY_PROFILE) {
+                    val viewModel: PsychologyProfileViewModel = viewModel(
+                        factory = PsychologyProfileViewModel.factory(container.diaryRepository, container.uiMessageManager),
+                    )
+                    PsychologyProfileScreen(
+                        viewModel = viewModel,
+                        onNavigateBack = { navController.popBackStack() },
+                    )
+                }
+                composable(DiaryRoutes.EMOTION_REPORTS) {
                     val viewModel: EmotionReportsViewModel = viewModel(
                         factory = EmotionReportsViewModel.factory(container.diaryRepository, container.uiMessageManager),
                     )
@@ -174,7 +203,7 @@ fun DiaryAppRoot(
                         onNavigateBack = { navController.popBackStack() },
                     )
                 }
-                composable("$EMOTION_DETAIL_ROUTE/{entryId}") { entryBackStack ->
+                composable("${DiaryRoutes.EMOTION_DETAIL}/{entryId}") { entryBackStack ->
                     val entryId = entryBackStack.arguments?.getString("entryId").orEmpty()
                     val viewModel: EmotionDetailViewModel = viewModel(
                         key = "emotion-detail-$entryId",
@@ -184,14 +213,28 @@ fun DiaryAppRoot(
                         viewModel = viewModel,
                         onNavigateBack = { navController.popBackStack() },
                         onOpenEntry = { targetEntryId ->
-                            navController.navigate("$VIEWER_ROUTE/$targetEntryId")
+                            navController.navigate(DiaryRoutes.viewer(targetEntryId))
                         },
                         onEditEntry = { targetEntryId ->
-                            navController.navigate("$EDITOR_ROUTE/$targetEntryId")
+                            navController.navigate(DiaryRoutes.editor(targetEntryId))
+                        },
+                        onOpenPsychologyChat = { targetEntryId ->
+                            navController.navigate(DiaryRoutes.psychologyChat(targetEntryId))
                         },
                     )
                 }
-                composable("$VIEWER_ROUTE/{entryId}") { entryBackStack ->
+                composable("${DiaryRoutes.PSYCHOLOGY_CHAT}/{entryId}") { entryBackStack ->
+                    val entryId = entryBackStack.arguments?.getString("entryId").orEmpty()
+                    val viewModel: PsychologyChatViewModel = viewModel(
+                        key = "psychology-chat-$entryId",
+                        factory = PsychologyChatViewModel.factory(container.diaryRepository, container.uiMessageManager, entryId),
+                    )
+                    PsychologyChatScreen(
+                        viewModel = viewModel,
+                        onNavigateBack = { navController.popBackStack() },
+                    )
+                }
+                composable("${DiaryRoutes.VIEWER}/{entryId}") { entryBackStack ->
                     val entryId = entryBackStack.arguments?.getString("entryId").orEmpty()
                     val viewModel: ViewerViewModel = viewModel(
                         key = "viewer-$entryId",
@@ -201,14 +244,14 @@ fun DiaryAppRoot(
                         viewModel = viewModel,
                         onNavigateBack = { navController.popBackStack() },
                         onEditEntry = { targetEntryId ->
-                            navController.navigate("$EDITOR_ROUTE/$targetEntryId")
+                            navController.navigate(DiaryRoutes.editor(targetEntryId))
                         },
                         onOpenEmotionCenter = {
-                            navigateToTopLevelFromDetail(EMOTION_ROUTE)
+                            navigateToTopLevelFromDetail(DiaryRoutes.EMOTION)
                         },
                     )
                 }
-                composable("$EDITOR_ROUTE/{entryId}") { entryBackStack ->
+                composable("${DiaryRoutes.EDITOR}/{entryId}") { entryBackStack ->
                     val entryId = entryBackStack.arguments?.getString("entryId").orEmpty()
                     val viewModel: EditorViewModel = viewModel(
                         key = "editor-$entryId",
@@ -218,14 +261,14 @@ fun DiaryAppRoot(
                         viewModel = viewModel,
                         onNavigateBack = { navController.popBackStack() },
                         onOpenEmotionCenter = {
-                            navigateToTopLevelFromDetail(EMOTION_ROUTE)
+                            navigateToTopLevelFromDetail(DiaryRoutes.EMOTION)
                         },
                         onOpenEmotionDetail = {
-                            navController.navigate("$EMOTION_DETAIL_ROUTE/$entryId")
+                            navController.navigate(DiaryRoutes.emotionDetail(entryId))
                         },
                     )
                 }
-                composable(SETTINGS_ROUTE) {
+                composable(DiaryRoutes.SETTINGS) {
                     val viewModel: SettingsViewModel = viewModel(
                         factory = SettingsViewModel.factory(container.diaryRepository, container.uiMessageManager),
                     )
