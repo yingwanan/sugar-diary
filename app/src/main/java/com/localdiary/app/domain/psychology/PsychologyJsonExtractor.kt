@@ -110,12 +110,106 @@ object PsychologyJsonExtractor {
     fun formatError(label: String, raw: String, cause: Throwable): IllegalStateException =
         IllegalStateException("${label}返回格式不正确。返回内容预览：${preview(raw)}", cause)
 
-    private fun normalizeJsonLikeText(value: String): String = value
-        .replace('“', '"')
-        .replace('”', '"')
-        .replace('＂', '"')
-        .replace('，', ',')
-        .replace('：', ':')
+    private fun normalizeJsonLikeText(value: String): String {
+        val repaired = StringBuilder(value.length)
+        var inString = false
+        var openedBySmartQuote = false
+        var escaping = false
+        for (index in value.indices) {
+            val char = value[index]
+            if (escaping) {
+                repaired.append(char)
+                escaping = false
+                continue
+            }
+            when {
+                char == '\\' && inString -> {
+                    repaired.append(char)
+                    escaping = true
+                }
+
+                char == '"' -> {
+                    repaired.append(char)
+                    inString = !inString
+                    openedBySmartQuote = false
+                }
+
+                isSmartQuote(char) && !inString -> {
+                    repaired.append('"')
+                    inString = true
+                    openedBySmartQuote = true
+                }
+
+                isSmartQuote(char) && shouldTreatSmartQuoteAsStringDelimiter(value, index, openedBySmartQuote) -> {
+                    repaired.append('"')
+                    inString = false
+                    openedBySmartQuote = false
+                }
+
+                !inString && char == '，' -> repaired.append(',')
+                !inString && char == '：' -> repaired.append(':')
+                else -> repaired.append(char)
+            }
+        }
+        return repaired.toString()
+    }
+
+    private fun isSmartQuote(char: Char): Boolean = char == '“' || char == '”' || char == '＂'
+
+    private fun shouldTreatSmartQuoteAsStringDelimiter(
+        value: String,
+        quoteIndex: Int,
+        openedBySmartQuote: Boolean,
+    ): Boolean {
+        val nextIndex = nextNonWhitespaceIndex(value, quoteIndex + 1) ?: return false
+        return when (value[nextIndex]) {
+            ':', '：', '}', ']' -> true
+            ',', '，' -> {
+                val afterCommaIndex = nextNonWhitespaceIndex(value, nextIndex + 1) ?: return true
+                if (!openedBySmartQuote && isSmartQuote(value[afterCommaIndex])) {
+                    return quotedTokenIsFollowedByColon(value, afterCommaIndex)
+                }
+                when (value[afterCommaIndex]) {
+                    '"' -> openedBySmartQuote || quotedTokenIsFollowedByColon(value, afterCommaIndex)
+                    '“', '”', '＂', '{', '}', '[', ']' -> true
+                    else -> false
+                }
+            }
+            else -> false
+        }
+    }
+
+    private fun quotedTokenIsFollowedByColon(value: String, quoteIndex: Int): Boolean {
+        val quote = value[quoteIndex]
+        var escaping = false
+        for (index in quoteIndex + 1 until value.length) {
+            val char = value[index]
+            if (escaping) {
+                escaping = false
+                continue
+            }
+            if (char == '\\') {
+                escaping = true
+                continue
+            }
+            val closesQuotedToken = when (quote) {
+                '"' -> char == '"'
+                else -> isSmartQuote(char) || char == '"'
+            }
+            if (closesQuotedToken) {
+                val nextIndex = nextNonWhitespaceIndex(value, index + 1) ?: return false
+                return value[nextIndex] == ':' || value[nextIndex] == '：'
+            }
+        }
+        return false
+    }
+
+    private fun nextNonWhitespaceIndex(value: String, startIndex: Int): Int? {
+        for (index in startIndex until value.length) {
+            if (!value[index].isWhitespace()) return index
+        }
+        return null
+    }
 
     private fun parseLabels(element: JsonElement?): List<String> = when (element) {
         is JsonArray -> element.mapNotNull(::parseLabelElement).filter { it.isNotBlank() }
