@@ -177,7 +177,7 @@ class PsychologyAgentOrchestrator(
             systemPrompt = synthesisPrompt,
             userPrompt = "请生成最终心理分析 JSON。",
         )
-        val analysisResult = decodeJsonOrError<PsychologyAnalysisResult>(synthesisText, "最终心理分析")
+        val analysisResult = PsychologyJsonExtractor.decodeAnalysisResultOrThrow(synthesisText, "最终心理分析")
 
         val profileAgent = PsychologyAgentDefinition(
             id = "profile_updater",

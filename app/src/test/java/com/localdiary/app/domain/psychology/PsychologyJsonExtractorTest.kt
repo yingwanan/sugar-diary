@@ -54,3 +54,20 @@ class PsychologyJsonExtractorTest {
         val items: List<String>,
     )
 }
+
+class PsychologyAnalysisResultJsonCompatibilityTest {
+    @Test
+    fun `decodes analysis result when labels are scored objects and closing quote is smart quote`() {
+        val result = PsychologyJsonExtractor.decodeAnalysisResultOrThrow(
+            """
+                {"labels":[{"name":"愧疚与自责”，“score":8},{"name":"怀旧性悲伤","score":7}],"intensity":82,"summary":"**整体**处在反刍中","suggestions":["先暂停自责"],"safetyFlag":false,"triggers":["旧关系回忆"]}
+            """.trimIndent(),
+            "最终心理分析",
+        )
+
+        assertEquals(listOf("愧疚与自责(8/10)", "怀旧性悲伤(7/10)"), result.labels)
+        assertEquals(82, result.intensity)
+        assertEquals(listOf("旧关系回忆"), result.triggers)
+        assertEquals("**整体**处在反刍中", result.summary)
+    }
+}
