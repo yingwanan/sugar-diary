@@ -23,6 +23,7 @@ import com.localdiary.app.data.transfer.TransferManager
 import com.localdiary.app.domain.emotion.EmotionCenterProjector
 import com.localdiary.app.domain.browser.EntryPreviewFormatter
 import com.localdiary.app.domain.psychology.PsychologyAgentContextBuilder
+import com.localdiary.app.domain.psychology.PsychologyLabelNormalizer
 import com.localdiary.app.domain.report.MoodReportGenerator
 import com.localdiary.app.model.AppStorageSettings
 import com.localdiary.app.model.AiEndpointConfig
@@ -110,7 +111,7 @@ class DiaryRepository(
                 }.getOrDefault("暂无正文摘要"),
                 latestEmotion = latestByEntry[entry.id]?.let { analysis ->
                     EntryEmotionSummary(
-                        labels = json.decodeFromString(analysis.labelsJson),
+                        labels = PsychologyLabelNormalizer.normalizeLabels(json.decodeFromString(analysis.labelsJson)),
                         summary = analysis.summary,
                         createdAt = analysis.createdAt,
                     )
@@ -736,7 +737,7 @@ class DiaryRepository(
     private fun analysisToModel(entity: EmotionAnalysisEntity): EmotionAnalysis = EmotionAnalysis(
         id = entity.id,
         entryId = entity.entryId,
-        labels = json.decodeFromString(entity.labelsJson),
+        labels = PsychologyLabelNormalizer.normalizeLabels(json.decodeFromString(entity.labelsJson)),
         intensity = entity.intensity,
         summary = entity.summary,
         suggestions = json.decodeFromString(entity.suggestionsJson),
@@ -839,7 +840,7 @@ class DiaryRepository(
     private fun PsychologyAnalysisResult.toEntity(entryId: String): EmotionAnalysisEntity = EmotionAnalysisEntity(
         id = UUID.randomUUID().toString(),
         entryId = entryId,
-        labelsJson = json.encodeToString(labels),
+        labelsJson = json.encodeToString(PsychologyLabelNormalizer.normalizeLabels(labels)),
         intensity = intensity,
         summary = summary,
         suggestionsJson = json.encodeToString(suggestions),

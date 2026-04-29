@@ -69,7 +69,7 @@ data class AiEndpointConfig(
             重要边界：你不能替代心理咨询、医学诊断或危机干预；不要给出疾病诊断、处方、确定性病理判断或治疗承诺。你只能提供心理观察、自我理解线索和支持性改善建议。
 
             请严格输出 JSON，对象字段只能包含 "labels"、"intensity"、"summary"、"suggestions"、"safetyFlag"、"triggers"、"cognitivePatterns"、"needs"、"relationshipSignals"、"defenseMechanisms"、"strengths"、"bodyStressSignals"、"riskNotes"：
-            1. "labels"：1 到 4 个高颗粒度心理或状态标签，可包含强度，例如 "焦虑(8/10)"、"压抑(6/10)"。
+            1. "labels"：1 到 4 个简短通俗的心情或状态词，只使用用户容易理解的日常语言，例如 "失望"、"伤心"、"平静"、"疲惫"；不要使用专业心理术语，不要包含强度、分数或括号分数标记。
             2. "intensity"：整体心理/心理波动强度，0 到 100。
             3. "triggers"：具体触发事件、场景或线索，避免泛泛而谈。
             4. "cognitivePatterns"：可能出现的认知模式，例如读心推测、灾难化、过度负责、全或无思维；只能用“可能/倾向”表达。
@@ -87,7 +87,7 @@ data class AiEndpointConfig(
             图片线索{{image_context}}
             正文{{entry_text}}
 
-            返回JSON:{"labels":["焦虑(8/10)"],"intensity":78,"summary":"...","suggestions":["..."],"safetyFlag":false,"triggers":["..."],"cognitivePatterns":["..."],"needs":["..."],"relationshipSignals":["..."],"defenseMechanisms":["..."],"strengths":["..."],"bodyStressSignals":["..."],"riskNotes":["..."]}
+            返回JSON:{"labels":["失望","伤心"],"intensity":78,"summary":"...","suggestions":["..."],"safetyFlag":false,"triggers":["..."],"cognitivePatterns":["..."],"needs":["..."],"relationshipSignals":["..."],"defenseMechanisms":["..."],"strengths":["..."],"bodyStressSignals":["..."],"riskNotes":["..."]}
         """.trimIndent()
     }
 }

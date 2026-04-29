@@ -171,7 +171,7 @@ private fun ReportCard(
         ) {
             Text(report.period.label, style = MaterialTheme.typography.titleMedium)
             MarkdownText(report.summary)
-            Text("主导心理: ${report.dominantMoods.joinToString()}")
+            Text("常见心情: ${report.dominantMoods.joinToString()}")
             report.advice.forEach { advice ->
                 MarkdownText("• $advice")
             }

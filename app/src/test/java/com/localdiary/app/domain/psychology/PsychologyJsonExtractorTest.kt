@@ -65,7 +65,7 @@ class PsychologyAnalysisResultJsonCompatibilityTest {
             "最终心理分析",
         )
 
-        assertEquals(listOf("愧疚与自责(8/10)", "怀旧性悲伤(7/10)"), result.labels)
+        assertEquals(listOf("愧疚与自责", "怀旧性悲伤"), result.labels)
         assertEquals(82, result.intensity)
         assertEquals(listOf("旧关系回忆"), result.triggers)
         assertEquals("**整体**处在反刍中", result.summary)
@@ -82,12 +82,12 @@ class PsychologyAnalysisResultJsonCompatibilityTest {
 
         assertEquals(
             listOf(
-                "愧疚与自责(8/10)",
-                "怀旧性悲伤(7/10)",
-                "关系失落与未完成感(7/10)",
-                "道德冲突后的反刍(7/10)",
-                "羞耻与自我怀疑(6/10)",
-                "边界与隐私议题(8/10)",
+                "愧疚与自责",
+                "怀旧性悲伤",
+                "关系失落与未完成感",
+                "道德冲突后的反刍",
+                "羞耻与自我怀疑",
+                "边界与隐私议题",
             ),
             result.labels,
         )
@@ -103,8 +103,20 @@ class PsychologyAnalysisResultJsonCompatibilityTest {
             "最终心理分析",
         )
 
-        assertEquals(listOf("愧疚与自责(8/10)"), result.labels)
+        assertEquals(listOf("愧疚与自责"), result.labels)
         assertEquals("你反复提到“我是不是做错了”，这更像反刍而不是事实结论。", result.summary)
         assertEquals(listOf("把“我很糟糕”改写成可验证的问题"), result.suggestions)
+    }
+
+    @Test
+    fun `decodes primitive scored labels as plain user friendly labels`() {
+        val result = PsychologyJsonExtractor.decodeAnalysisResultOrThrow(
+            """
+                {"labels":["失望(7/10)","伤心 (6/10)","无力感"],"intensity":66,"summary":"状态低落。","suggestions":["先休息"],"safetyFlag":false}
+            """.trimIndent(),
+            "最终心理分析",
+        )
+
+        assertEquals(listOf("失望", "伤心", "无力感"), result.labels)
     }
 }

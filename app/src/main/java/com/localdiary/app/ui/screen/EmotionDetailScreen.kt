@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import com.localdiary.app.model.EmotionAnalysis
 import com.localdiary.app.model.PsychologyAgentProcessEvent
+import com.localdiary.app.domain.psychology.PsychologyAgentEventDisplay
 import com.localdiary.app.ui.components.MarkdownText
 import com.localdiary.app.ui.components.PsychologyAgentSelector
 import com.localdiary.app.ui.viewmodel.EmotionDetailViewModel
@@ -51,7 +52,8 @@ fun EmotionDetailScreen(
     val coroutineScope = rememberCoroutineScope()
 
     fun scrollToAgent(agentId: String) {
-        val eventIndex = state.runtimeEvents.indexOfFirst { it.agentId == agentId }
+        val eventIndex = PsychologyAgentEventDisplay.visibleEvents(state.runtimeEvents)
+            .indexOfFirst { it.agentId == agentId }
         if (eventIndex >= 0) {
             coroutineScope.launch { listState.animateScrollToItem(3 + eventIndex) }
         }
@@ -76,6 +78,11 @@ fun EmotionDetailScreen(
                     Text("返回")
                 }
             },
+            actions = {
+                TextButton(onClick = { coroutineScope.launch { listState.animateScrollToItem(0) } }) {
+                    Text("回顶")
+                }
+            },
         )
 
         when {
@@ -93,6 +100,11 @@ fun EmotionDetailScreen(
 
             state.document != null -> {
                 val document = state.document
+                val visibleEvents = PsychologyAgentEventDisplay.visibleEvents(state.runtimeEvents)
+                val showSynthesisStatus = PsychologyAgentEventDisplay.shouldShowSynthesisStatus(
+                    events = state.runtimeEvents,
+                    working = state.working,
+                )
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
@@ -147,18 +159,30 @@ fun EmotionDetailScreen(
                         }
                     }
 
-                    if (state.runtimeEvents.isNotEmpty()) {
+                    if (visibleEvents.isNotEmpty() || showSynthesisStatus) {
                         item("agent-process-title") {
                             Text(if (state.working) "Agent 运行中" else "Agent 过程摘要", style = MaterialTheme.typography.titleMedium)
                         }
-                        item("agent-process-nav") {
-                            AgentProcessNavigator(
-                                events = state.runtimeEvents,
-                                onSelectAgent = ::scrollToAgent,
-                            )
+                        if (visibleEvents.isNotEmpty()) {
+                            item("agent-process-nav") {
+                                AgentProcessNavigator(
+                                    events = visibleEvents,
+                                    onSelectAgent = ::scrollToAgent,
+                                )
+                            }
                         }
-                        items(state.runtimeEvents, key = { it.id }) { event ->
+                        items(visibleEvents, key = { it.id }) { event ->
                             AgentProcessEventCard(event)
+                        }
+                        if (showSynthesisStatus) {
+                            item("synthesis-status") {
+                                Card(modifier = Modifier.fillMaxWidth()) {
+                                    Text(
+                                        "综合 Agent 正在整合各 Agent 观点，稍后会在最新分析中展示可读结果。",
+                                        modifier = Modifier.padding(16.dp),
+                                    )
+                                }
+                            }
                         }
                     }
 
@@ -208,8 +232,7 @@ private fun EmotionAnalysisCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(title, style = MaterialTheme.typography.titleMedium)
-            Text("心理状态: ${analysis.labels.joinToString()}")
-            Text("强度: ${analysis.intensity}/100")
+            Text("心情: ${analysis.labels.joinToString()}")
             MarkdownText(analysis.summary)
             AnalysisSection("触发点", analysis.triggers)
             AnalysisSection("认知模式", analysis.cognitivePatterns)

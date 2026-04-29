@@ -162,6 +162,7 @@ class PsychologyAgentOrchestrator(
 
             你现在扮演综合 Agent。请整合专项 Agent 分析、补充/反驳和用户画像，生成最终分析。
             必须严格输出 JSON，对象字段为：labels, intensity, summary, suggestions, safetyFlag, triggers, cognitivePatterns, needs, relationshipSignals, defenseMechanisms, strengths, bodyStressSignals, riskNotes。
+            labels 只允许输出 1 到 4 个简短通俗的心情或状态词，例如 "失望"、"伤心"；不要输出专业术语、score 字段、强度分数或括号分数。
             不要输出 JSON 以外的文字。
 
             专项分析：

@@ -330,8 +330,7 @@ fun EditorScreen(
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 Text("最近一次分析", style = MaterialTheme.typography.titleMedium)
-                                Text("心理状态: ${analysis.labels.joinToString()}")
-                                Text("强度: ${analysis.intensity}/100")
+                                Text("心情: ${analysis.labels.joinToString()}")
                                 Text(analysis.summary)
                                 analysis.suggestions.forEach { suggestion ->
                                     Text("• $suggestion")
@@ -426,7 +425,8 @@ private fun EditorTab(
                     OutlinedTextField(
                         value = state.tagsInput,
                         onValueChange = onTagsChange,
-                        label = { Text("标签，逗号分隔") },
+                        label = { Text("标签，英文逗号分隔") },
+                        placeholder = { Text("生活,工作,旅行") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                     )

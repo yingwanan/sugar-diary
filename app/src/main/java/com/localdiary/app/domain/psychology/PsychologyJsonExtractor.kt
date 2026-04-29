@@ -212,8 +212,8 @@ object PsychologyJsonExtractor {
     }
 
     private fun parseLabels(element: JsonElement?): List<String> = when (element) {
-        is JsonArray -> element.mapNotNull(::parseLabelElement).filter { it.isNotBlank() }
-        is JsonPrimitive -> listOfNotNull(element.contentOrNull?.takeIf { it.isNotBlank() })
+        is JsonArray -> PsychologyLabelNormalizer.normalizeLabels(element.mapNotNull(::parseLabelElement))
+        is JsonPrimitive -> PsychologyLabelNormalizer.normalizeLabels(listOfNotNull(element.contentOrNull))
         else -> emptyList()
     }
 
@@ -223,10 +223,8 @@ object PsychologyJsonExtractor {
             val name = element.stringValue("name").ifBlank {
                 element.stringValue("label").ifBlank { element.stringValue("text") }
             }
-            val score = element.optionalIntValue("score") ?: element.optionalIntValue("intensity")
             when {
                 name.isBlank() -> null
-                score != null -> "$name($score/10)"
                 else -> name
             }
         }

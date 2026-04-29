@@ -1,5 +1,6 @@
 package com.localdiary.app.domain.report
 
+import com.localdiary.app.domain.psychology.PsychologyLabelNormalizer
 import com.localdiary.app.model.EmotionAnalysis
 import com.localdiary.app.model.MoodReport
 import com.localdiary.app.model.ReportPeriod
@@ -12,7 +13,7 @@ class MoodReportGenerator {
         rangeEnd: Long,
         analyses: List<EmotionAnalysis>,
     ): MoodReport {
-        val moodCounts = analyses.flatMap { it.labels }
+        val moodCounts = analyses.flatMap { PsychologyLabelNormalizer.normalizeLabels(it.labels) }
             .groupingBy { it }
             .eachCount()
             .toList()
@@ -30,7 +31,7 @@ class MoodReportGenerator {
             "这个周期暂无足够的心理样本。"
         } else {
             val dominant = moodCounts.firstOrNull() ?: "平稳"
-            "本周期共分析 ${analyses.size} 篇文本，主导心理偏向 $dominant，平均强度约为 $averageIntensity/100。"
+            "本周期共分析 ${analyses.size} 篇文本，常见心情偏向 $dominant。"
         }
 
         return MoodReport(
