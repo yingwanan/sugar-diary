@@ -96,7 +96,9 @@ fun EmbeddedImagePreview(
 }
 
 private object EmbeddedImageThumbnailCache {
-    private val cache = LruCache<String, Bitmap>(16)
+    private val cache = object : LruCache<String, Bitmap>(24 * 1024) {
+        override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount / 1024
+    }
 
     operator fun get(dataUrl: String): Bitmap? = cache.get(dataUrl)
 

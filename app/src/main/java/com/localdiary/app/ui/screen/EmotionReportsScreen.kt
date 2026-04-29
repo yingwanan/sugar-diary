@@ -16,7 +16,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -25,6 +24,7 @@ import com.localdiary.app.model.MoodReport
 import com.localdiary.app.ui.components.MarkdownText
 import com.localdiary.app.model.ReportPeriod
 import com.localdiary.app.model.label
+import com.localdiary.app.ui.designsystem.organism.AppTopBar
 import com.localdiary.app.ui.viewmodel.EmotionReportsViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -50,13 +50,9 @@ fun EmotionReportsScreen(
                 ),
             ),
     ) {
-        TopAppBar(
-            title = { Text("周期报告") },
-            navigationIcon = {
-                TextButton(onClick = onNavigateBack) {
-                    Text("返回")
-                }
-            },
+        AppTopBar(
+            title = "周期报告",
+            onNavigateBack = onNavigateBack,
         )
 
         LazyColumn(

@@ -20,7 +20,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
@@ -33,6 +32,8 @@ import com.localdiary.app.model.PsychologyAgentProcessEvent
 import com.localdiary.app.domain.psychology.PsychologyAgentEventDisplay
 import com.localdiary.app.ui.components.MarkdownText
 import com.localdiary.app.ui.components.PsychologyAgentSelector
+import com.localdiary.app.ui.designsystem.molecule.AppLoadingState
+import com.localdiary.app.ui.designsystem.organism.AppTopBar
 import com.localdiary.app.ui.viewmodel.EmotionDetailViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -71,13 +72,9 @@ fun EmotionDetailScreen(
                 ),
             ),
     ) {
-        TopAppBar(
-            title = { Text(state.document?.meta?.title ?: "心理分析") },
-            navigationIcon = {
-                TextButton(onClick = onNavigateBack) {
-                    Text("返回")
-                }
-            },
+        AppTopBar(
+            title = state.document?.meta?.title ?: "心理分析",
+            onNavigateBack = onNavigateBack,
             actions = {
                 TextButton(onClick = { coroutineScope.launch { listState.animateScrollToItem(0) } }) {
                     Text("回顶")
@@ -87,9 +84,7 @@ fun EmotionDetailScreen(
 
         when {
             state.loading -> {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("正在加载心理分析...")
-                }
+                AppLoadingState(message = "正在加载心理分析...", modifier = Modifier.fillMaxSize())
             }
 
             state.error != null -> {

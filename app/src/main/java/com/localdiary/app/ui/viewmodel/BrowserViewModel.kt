@@ -26,6 +26,7 @@ data class BrowserUiState(
     val availableTags: List<String> = emptyList(),
     val availableMoods: List<String> = emptyList(),
     val items: List<EntryBrowserItem> = emptyList(),
+    val pendingDeleteItemId: String? = null,
 )
 
 class BrowserViewModel(
@@ -130,6 +131,20 @@ class BrowserViewModel(
                 uiMessageManager.show(error.message ?: "删除文章失败。")
             }
         }
+    }
+
+    fun requestDelete(entryId: String) {
+        uiState = uiState.copy(pendingDeleteItemId = entryId)
+    }
+
+    fun dismissDelete() {
+        uiState = uiState.copy(pendingDeleteItemId = null)
+    }
+
+    fun confirmPendingDelete() {
+        val entryId = uiState.pendingDeleteItemId ?: return
+        uiState = uiState.copy(pendingDeleteItemId = null)
+        deleteEntry(entryId)
     }
 
     private fun rebuildState() {

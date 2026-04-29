@@ -11,6 +11,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -66,7 +70,10 @@ fun EmotionCenterScreen(
                     Text("周期报告")
                 }
                 IconButton(onClick = viewModel::toggleSearch) {
-                    Text(if (state.isSearchExpanded) "✕" else "⌕", style = MaterialTheme.typography.titleLarge)
+                    Icon(
+                        imageVector = if (state.isSearchExpanded) Icons.Filled.Close else Icons.Filled.Search,
+                        contentDescription = if (state.isSearchExpanded) "关闭搜索" else "搜索",
+                    )
                 }
             },
             stats = {

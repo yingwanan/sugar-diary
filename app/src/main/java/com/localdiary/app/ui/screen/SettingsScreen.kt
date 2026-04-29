@@ -5,6 +5,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,10 +24,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import com.localdiary.app.model.StorageMode
 import com.localdiary.app.ui.viewmodel.SettingsViewModel
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
@@ -111,6 +117,8 @@ fun SettingsScreen(
                 onValueChange = viewModel::updateApiKey,
                 label = { Text("主模型 API Key") },
                 modifier = Modifier.fillMaxWidth(),
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             )
             ToggleRow(
                 title = "主模型支持图片理解",
@@ -118,11 +126,11 @@ fun SettingsScreen(
                 checked = state.supportsVision,
                 onCheckedChange = viewModel::updateSupportsVision,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = viewModel::saveAiConfig) {
+            SettingsActionRow {
+                Button(onClick = viewModel::saveAiConfig, enabled = !state.busy) {
                     Text("保存 AI 配置")
                 }
-                Button(onClick = viewModel::testAiConnection) {
+                Button(onClick = viewModel::testAiConnection, enabled = !state.busy) {
                     Text("测试主模型")
                 }
             }
@@ -156,8 +164,10 @@ fun SettingsScreen(
                     onValueChange = viewModel::updateImageApiKey,
                     label = { Text("图片模型 API Key") },
                     modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 )
-                Button(onClick = viewModel::testImageConnection) {
+                Button(onClick = viewModel::testImageConnection, enabled = !state.busy) {
                     Text("测试图片模型")
                 }
             }
@@ -200,11 +210,11 @@ fun SettingsScreen(
             } else {
                 Text("当前系统目录: ${state.systemFolderUri ?: "未选择"}")
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = viewModel::useAppPrivateStorage) {
+            SettingsActionRow {
+                Button(onClick = viewModel::useAppPrivateStorage, enabled = !state.busy) {
                     Text("使用应用私有目录")
                 }
-                Button(onClick = { pickSystemFolderLauncher.launch(null) }) {
+                Button(onClick = { pickSystemFolderLauncher.launch(null) }, enabled = !state.busy) {
                     Text(if (state.systemFolderUri.isNullOrBlank()) "选择系统文件夹" else "更换系统文件夹")
                 }
             }
@@ -227,7 +237,7 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 3,
             )
-            Button(onClick = viewModel::saveCustomStyle) {
+            Button(onClick = viewModel::saveCustomStyle, enabled = !state.busy) {
                 Text("保存自定义文风")
             }
             state.styles.forEach { preset ->
@@ -247,23 +257,35 @@ fun SettingsScreen(
             title = "导入导出",
             description = "用于整库迁移，或直接迁移原始文章目录。",
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { exportBundleLauncher.launch("diary_export.zip") }) {
+            SettingsActionRow {
+                Button(onClick = { exportBundleLauncher.launch("diary_export.zip") }, enabled = !state.busy) {
                     Text("导出完整迁移包")
                 }
-                Button(onClick = { importBundleLauncher.launch(arrayOf("application/zip", "*/*")) }) {
+                Button(onClick = { importBundleLauncher.launch(arrayOf("application/zip", "*/*")) }, enabled = !state.busy) {
                     Text("导入完整迁移包")
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { exportRawLauncher.launch(null) }) {
+            SettingsActionRow {
+                Button(onClick = { exportRawLauncher.launch(null) }, enabled = !state.busy) {
                     Text("导出原始文章文件夹")
                 }
-                Button(onClick = { importRawLauncher.launch(null) }) {
+                Button(onClick = { importRawLauncher.launch(null) }, enabled = !state.busy) {
                     Text("导入原始文章文件夹")
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SettingsActionRow(content: @Composable () -> Unit) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        content()
     }
 }
 

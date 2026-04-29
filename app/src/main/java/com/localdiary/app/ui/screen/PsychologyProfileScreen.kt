@@ -16,13 +16,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import com.localdiary.app.model.UserPsychologyProfile
 import com.localdiary.app.ui.components.MarkdownText
+import com.localdiary.app.ui.designsystem.organism.AppTopBar
 import com.localdiary.app.ui.viewmodel.ProfileField
 import com.localdiary.app.ui.viewmodel.PsychologyProfileViewModel
 
@@ -45,9 +45,9 @@ fun PsychologyProfileScreen(
                 ),
             ),
     ) {
-        TopAppBar(
-            title = { Text("用户画像") },
-            navigationIcon = { TextButton(onClick = onNavigateBack) { Text("返回") } },
+        AppTopBar(
+            title = "用户画像",
+            onNavigateBack = onNavigateBack,
             actions = { TextButton(onClick = viewModel::save) { Text("保存") } },
         )
         LazyColumn(

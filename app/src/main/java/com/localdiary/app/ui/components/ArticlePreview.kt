@@ -32,7 +32,16 @@ fun ArticlePreview(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        itemsIndexed(blocks) { index, block ->
+        itemsIndexed(
+            items = blocks,
+            key = { _, block -> block.id },
+            contentType = { _, block ->
+                when (block) {
+                    is EditorDocumentBlock.Text -> "text"
+                    is EditorDocumentBlock.Image -> "image"
+                }
+            },
+        ) { index, block ->
             when (block) {
                 is EditorDocumentBlock.Text -> ArticleTextBlock(
                     text = block.text,

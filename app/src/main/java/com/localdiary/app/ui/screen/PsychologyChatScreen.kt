@@ -16,8 +16,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -25,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.localdiary.app.model.PsychologyChatMessage
 import com.localdiary.app.ui.components.MarkdownText
 import com.localdiary.app.model.PsychologyChatRole
+import com.localdiary.app.ui.designsystem.organism.AppTopBar
 import com.localdiary.app.ui.viewmodel.PsychologyChatViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,13 +46,9 @@ fun PsychologyChatScreen(
                 ),
             ),
     ) {
-        TopAppBar(
-            title = { Text(state.document?.meta?.title ?: "心理 Agent") },
-            navigationIcon = {
-                TextButton(onClick = onNavigateBack) {
-                    Text("返回")
-                }
-            },
+        AppTopBar(
+            title = state.document?.meta?.title ?: "心理 Agent",
+            onNavigateBack = onNavigateBack,
         )
         Column(
             modifier = Modifier

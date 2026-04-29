@@ -1,248 +1,259 @@
 package com.localdiary.app.ui.screen
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.localdiary.app.model.BrowserCategory
 import com.localdiary.app.model.BrowserTimeBucket
 import com.localdiary.app.model.EntryBrowserItem
-import com.localdiary.app.ui.components.OverviewHeroCard
-import com.localdiary.app.ui.components.OverviewHeroChip
+import com.localdiary.app.ui.designsystem.molecule.AppChip
+import com.localdiary.app.ui.designsystem.molecule.AppEmptyState
+import com.localdiary.app.ui.designsystem.molecule.AppIconButton
+import com.localdiary.app.ui.designsystem.molecule.AppListItem
+import com.localdiary.app.ui.designsystem.organism.AppDialog
+import com.localdiary.app.ui.designsystem.organism.AppSearchBar
+import com.localdiary.app.ui.designsystem.template.AppScreenScaffold
+import com.localdiary.app.ui.designsystem.token.DiarySpacing
 import com.localdiary.app.ui.viewmodel.BrowserViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun BrowserScreen(
     viewModel: BrowserViewModel,
     onOpenEntry: (String) -> Unit,
 ) {
     val state = viewModel.uiState
-    var pendingDelete by remember { mutableStateOf<EntryBrowserItem?>(null) }
+    val pendingDeleteItem = state.pendingDeleteItemId?.let { id ->
+        state.items.firstOrNull { it.meta.id == id }
+    }
 
-    pendingDelete?.let { item ->
-        AlertDialog(
-            onDismissRequest = { pendingDelete = null },
-            title = { Text("删除这篇文章？") },
-            text = { Text("《${item.meta.title}》的正文、版本快照和心理分析记录都会被删除。") },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.deleteEntry(item.meta.id)
-                    pendingDelete = null
-                }) {
-                    Text("彻底删除")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) {
-                    Text("取消")
-                }
-            },
+    if (state.pendingDeleteItemId != null) {
+        AppDialog(
+            title = "删除这篇文章？",
+            text = pendingDeleteItem?.let {
+                "《${it.meta.title}》的正文、版本快照和心理分析记录都会被删除。"
+            } ?: "这篇文章的正文、版本快照和心理分析记录都会被删除。",
+            confirmText = "彻底删除",
+            onConfirm = viewModel::confirmPendingDelete,
+            dismissText = "取消",
+            onDismiss = viewModel::dismissDelete,
+            onDismissRequest = viewModel::dismissDelete,
         )
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.surfaceContainerLowest,
-                        MaterialTheme.colorScheme.background,
-                    ),
-                ),
-            )
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        OverviewHeroCard(
-            title = "文章浏览",
-            subtitle = "按标签、时间线、心情筛选，或直接搜索标题和日期。",
-            actions = {
-                IconButton(onClick = viewModel::toggleSearch) {
-                    Text(if (state.isSearchExpanded) "✕" else "⌕", style = MaterialTheme.typography.titleLarge)
-                }
-            },
-            stats = {
-                OverviewHeroChip("结果 ${state.items.size}")
-                OverviewHeroChip("标签 ${state.availableTags.size}")
-                OverviewHeroChip("心情 ${state.availableMoods.size}")
-            },
-            expandedContent = if (state.isSearchExpanded) {
-                {
-                    OutlinedTextField(
-                        value = state.query,
-                        onValueChange = viewModel::updateQuery,
-                        label = { Text("搜索标题或日期") },
-                        placeholder = { Text("例如 春天 / 2026-03-21 / 2026-03") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                    )
-                }
-            } else {
-                null
-            },
-        )
-
-        ScrollableTabRow(selectedTabIndex = state.category.ordinal) {
-            BrowserCategory.entries.forEach { category ->
-                Tab(
-                    selected = state.category == category,
-                    onClick = { viewModel.selectCategory(category) },
-                    text = { Text(category.label) },
-                )
-            }
-        }
-
-        when (state.category) {
-            BrowserCategory.ALL -> Unit
-            BrowserCategory.TAG -> FilterRow {
-                state.availableTags.forEach { tag ->
-                    FilterChip(
-                        selected = state.selectedTag == tag,
-                        onClick = { viewModel.toggleTag(tag) },
-                        label = { Text(tag) },
-                    )
-                }
-            }
-            BrowserCategory.TIME -> FilterRow {
-                BrowserTimeBucket.entries.forEach { bucket ->
-                    FilterChip(
-                        selected = state.selectedTimeBucket == bucket,
-                        onClick = { viewModel.toggleTimeBucket(bucket) },
-                        label = { Text(bucket.label) },
-                    )
-                }
-            }
-            BrowserCategory.MOOD -> FilterRow {
-                state.availableMoods.forEach { mood ->
-                    FilterChip(
-                        selected = state.selectedMood == mood,
-                        onClick = { viewModel.toggleMood(mood) },
-                        label = { Text(mood) },
-                    )
-                }
-            }
-        }
-
-        if (state.items.isEmpty() && !state.loading) {
-            BrowserHintCard("没有符合条件的文章。")
-        }
-
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+    AppScreenScaffold {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(it)
+                .padding(horizontal = DiarySpacing.space4),
+            verticalArrangement = Arrangement.spacedBy(DiarySpacing.space4),
         ) {
-            items(
-                items = state.items,
-                key = { it.meta.id },
-                contentType = { "entry" },
-            ) { item ->
-                BrowserEntryCard(
-                    item = item,
-                    onOpenEntry = onOpenEntry,
-                    onDelete = { pendingDelete = item },
+            BrowserHeader(
+                resultCount = state.items.size,
+                tagCount = state.availableTags.size,
+                moodCount = state.availableMoods.size,
+                query = state.query,
+                onQueryChange = viewModel::updateQuery,
+                expanded = state.isSearchExpanded,
+                onToggleExpand = viewModel::toggleSearch,
+            )
+
+            ScrollableTabRow(
+                selectedTabIndex = state.category.ordinal,
+                edgePadding = 0.dp,
+            ) {
+                BrowserCategory.entries.forEach { category ->
+                    Tab(
+                        selected = state.category == category,
+                        onClick = { viewModel.selectCategory(category) },
+                        text = { Text(category.label) },
+                    )
+                }
+            }
+
+            when (state.category) {
+                BrowserCategory.ALL -> Unit
+                BrowserCategory.TAG -> FilterFlowRow {
+                    state.availableTags.forEach { tag ->
+                        AppChip(
+                            label = tag,
+                            selected = state.selectedTag == tag,
+                            onClick = { viewModel.toggleTag(tag) },
+                        )
+                    }
+                }
+                BrowserCategory.TIME -> FilterFlowRow {
+                    BrowserTimeBucket.entries.forEach { bucket ->
+                        AppChip(
+                            label = bucket.label,
+                            selected = state.selectedTimeBucket == bucket,
+                            onClick = { viewModel.toggleTimeBucket(bucket) },
+                        )
+                    }
+                }
+                BrowserCategory.MOOD -> FilterFlowRow {
+                    state.availableMoods.forEach { mood ->
+                        AppChip(
+                            label = mood,
+                            selected = state.selectedMood == mood,
+                            onClick = { viewModel.toggleMood(mood) },
+                        )
+                    }
+                }
+            }
+
+            if (state.items.isEmpty() && !state.loading) {
+                AppEmptyState(
+                    icon = Icons.Filled.SearchOff,
+                    title = "没有符合条件的文章",
+                    description = "换个关键词或清除筛选条件再试试",
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
                 )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(DiarySpacing.space2),
+                ) {
+                    items(
+                        items = state.items,
+                        key = { it.meta.id },
+                        contentType = { "entry" },
+                    ) { item ->
+                        BrowserEntryListItem(
+                            item = item,
+                            onOpenEntry = onOpenEntry,
+                            onDelete = { viewModel.requestDelete(item.meta.id) },
+                        )
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun BrowserHintCard(message: String) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Text(message, modifier = Modifier.padding(16.dp))
-    }
-}
-
-@Composable
-private fun FilterRow(content: @Composable () -> Unit) {
+private fun BrowserHeader(
+    resultCount: Int,
+    tagCount: Int,
+    moodCount: Int,
+    query: String,
+    onQueryChange: (String) -> Unit,
+    expanded: Boolean,
+    onToggleExpand: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+            .padding(top = DiarySpacing.space5),
+        horizontalArrangement = Arrangement.spacedBy(DiarySpacing.space3),
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "浏览",
+                style = MaterialTheme.typography.headlineLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            Text(
+                text = "结果 $resultCount · 标签 $tagCount · 心情 $moodCount",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        AppSearchBar(
+            query = query,
+            onQueryChange = onQueryChange,
+            placeholder = "搜索标题或日期",
+            expanded = expanded,
+            onToggleExpand = onToggleExpand,
+            modifier = if (expanded) Modifier.weight(2f) else Modifier,
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FilterFlowRow(content: @Composable () -> Unit) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(DiarySpacing.space2),
+        verticalArrangement = Arrangement.spacedBy(DiarySpacing.space2),
     ) {
         content()
     }
 }
 
 @Composable
-private fun BrowserEntryCard(
+private fun BrowserEntryListItem(
     item: EntryBrowserItem,
     onOpenEntry: (String) -> Unit,
     onDelete: () -> Unit,
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-        ),
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface),
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text(
-                item.meta.title,
-                style = MaterialTheme.typography.titleLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = "更新于 " + SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(item.meta.updatedAt)),
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AssistChip(onClick = {}, label = { Text(item.meta.format.label) })
+        AppListItem(
+            headline = item.meta.title,
+            supporting = "更新于 " + SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(item.meta.updatedAt)),
+            trailing = {
+                Row(horizontalArrangement = Arrangement.spacedBy(DiarySpacing.space1)) {
+                    AppChip(label = item.meta.format.label)
+                    AppIconButton(
+                        onClick = onDelete,
+                        imageVector = Icons.Filled.Delete,
+                        contentDescription = "删除《${item.meta.title}》",
+                    )
+                }
+            },
+            onClick = { onOpenEntry(item.meta.id) },
+        )
+        if (item.meta.tags.isNotEmpty()) {
+            Row(
+                modifier = Modifier.padding(horizontal = DiarySpacing.space4),
+                horizontalArrangement = Arrangement.spacedBy(DiarySpacing.space2),
+            ) {
                 item.meta.tags.take(3).forEach { tag ->
-                    AssistChip(onClick = {}, label = { Text(tag) })
-                }
-            }
-            Text(
-                text = item.previewText,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = { onOpenEntry(item.meta.id) }) {
-                    Text("查看")
-                }
-                TextButton(onClick = onDelete) {
-                    Text("删除")
+                    AppChip(label = tag)
                 }
             }
         }
+        Text(
+            text = item.previewText,
+            modifier = Modifier.padding(
+                start = DiarySpacing.space4,
+                end = DiarySpacing.space4,
+                bottom = DiarySpacing.space4,
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }

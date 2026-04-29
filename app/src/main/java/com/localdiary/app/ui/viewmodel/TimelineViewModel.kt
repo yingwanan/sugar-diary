@@ -15,6 +15,8 @@ class TimelineViewModel(
     private val repository: DiaryRepository,
     private val uiMessageManager: UiMessageManager,
 ) : ViewModel() {
+    private var creatingEntry = false
+
     val entries: StateFlow<List<EntryMeta>> = repository.observeEntries()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -22,13 +24,19 @@ class TimelineViewModel(
         title: String,
         onCreated: (String) -> Unit,
     ) {
+        if (creatingEntry) return
         viewModelScope.launch {
-            runCatching {
-                repository.createEntry(title = title, format = com.localdiary.app.model.EntryFormat.MARKDOWN)
-            }.onSuccess { entryId ->
-                onCreated(entryId)
-            }.onFailure { error ->
-                uiMessageManager.show(error.message ?: "创建文章失败。")
+            creatingEntry = true
+            try {
+                runCatching {
+                    repository.createEntry(title = title, format = com.localdiary.app.model.EntryFormat.MARKDOWN)
+                }.onSuccess { entryId ->
+                    onCreated(entryId)
+                }.onFailure { error ->
+                    uiMessageManager.show(error.message ?: "创建文章失败。")
+                }
+            } finally {
+                creatingEntry = false
             }
         }
     }

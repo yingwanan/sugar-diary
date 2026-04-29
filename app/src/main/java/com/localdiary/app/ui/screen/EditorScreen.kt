@@ -5,7 +5,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,6 +34,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -71,7 +71,7 @@ fun EditorScreen(
     val state = viewModel.uiState
     val context = LocalContext.current
     val resolver = context.contentResolver
-    var tabIndex by remember { mutableStateOf(0) }
+    var tabIndex by remember { mutableIntStateOf(0) }
     var confirmAction by remember { mutableStateOf<String?>(null) }
     var pendingStyle by remember { mutableStateOf<StylePreset?>(null) }
     var showDiscardDialog by remember { mutableStateOf(false) }
@@ -193,11 +193,17 @@ fun EditorScreen(
                 }
             },
             actions = {
-                TextButton(onClick = { showDeleteDialog = true }) {
+                TextButton(
+                    onClick = { showDeleteDialog = true },
+                    enabled = !state.working,
+                ) {
                     Text("删除")
                 }
-                TextButton(onClick = viewModel::save) {
-                    Text("保存")
+                TextButton(
+                    onClick = viewModel::save,
+                    enabled = !state.working,
+                ) {
+                    Text(if (state.working) "处理中" else "保存")
                 }
             },
         )
@@ -257,7 +263,7 @@ fun EditorScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = { confirmAction = "review" },
-                        enabled = state.reviewTargetFormat != state.format,
+                        enabled = !state.working && state.reviewTargetFormat != state.format,
                     ) {
                         Text("生成格式转换稿")
                     }
@@ -287,6 +293,7 @@ fun EditorScreen(
                         items(state.styles, key = { it.id }) { preset ->
                             StylePresetCard(
                                 preset = preset,
+                                enabled = !state.working,
                                 onApply = { pendingStyle = preset },
                             )
                         }
@@ -314,8 +321,11 @@ fun EditorScreen(
                 }
                 item("emotion-actions") {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { confirmAction = "analysis" }) {
-                            Text("重新分析当前文章")
+                        Button(
+                            onClick = { confirmAction = "analysis" },
+                            enabled = !state.working,
+                        ) {
+                            Text(if (state.working) "分析中..." else "重新分析当前文章")
                         }
                         TextButton(onClick = onOpenEmotionDetail) {
                             Text("查看完整分析")
@@ -454,7 +464,10 @@ private fun EditorTab(
                                 Text("标题与标签")
                             }
                         }
-                        Button(onClick = onInsertImage) {
+                        Button(
+                            onClick = onInsertImage,
+                            enabled = !state.working,
+                        ) {
                             Text("插入图片")
                         }
                     }
@@ -537,9 +550,7 @@ private fun MetaSummaryCard(
     onExpand: () -> Unit,
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onExpand),
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Row(
@@ -568,13 +579,14 @@ private fun MetaSummaryCard(
 @Composable
 private fun StylePresetCard(
     preset: StylePreset,
+    enabled: Boolean = true,
     onApply: () -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(preset.name, style = MaterialTheme.typography.titleMedium)
             Text(preset.prompt)
-            TextButton(onClick = onApply) {
+            TextButton(onClick = onApply, enabled = enabled) {
                 Text("发送到 LLM 润色")
             }
         }
@@ -666,8 +678,8 @@ private fun EntryStatusBanner(
 }
 
 private fun formatBytes(bytes: Int): String = when {
-    bytes >= 1024 * 1024 -> String.format("%.1f MB", bytes / 1024f / 1024f)
-    bytes >= 1024 -> String.format("%.0f KB", bytes / 1024f)
+    bytes >= 1024 * 1024 -> String.format(Locale.getDefault(), "%.1f MB", bytes / 1024f / 1024f)
+    bytes >= 1024 -> String.format(Locale.getDefault(), "%.0f KB", bytes / 1024f)
     else -> "$bytes B"
 }
 
